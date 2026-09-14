@@ -2,6 +2,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <openGA.hpp>
 
 using namespace std;
 bool constraint_checking(int& cache, int& video, int& nbr_videos, int& cap_cache, vector<int>& videos, vector<vector<bool>>& results);
