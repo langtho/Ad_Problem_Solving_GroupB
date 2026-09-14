@@ -2,29 +2,36 @@
 #include <string>
 #include <sstream>
 #include <vector>
-#include <openGA.hpp>
+
+struct ProblemData {
+    int nbr_videos=0;
+    int nbr_endpoints=0;
+    int nbr_requests=0;
+    int nbr_caches=0;
+    int cap_cache=0;
+    std::vector<int> videos;
+    std::vector<int> endpoints;
+    std::vector<std::vector<int>> network;
+    std::vector<std::vector<int>> requests;
+};
+struct Solution {
+    std::vector<std::vector<bool>> results;
+    std::vector<int> used_capacity;
+};
 
 using namespace std;
 bool constraint_checking(int& cache, int& video, int& nbr_videos, int& cap_cache, vector<int>& videos, vector<vector<bool>>& results);
 void add_video_to_cache(int& cache, int& video, vector<vector<bool>>& results);
-int eval_time_saved(int& nbr_videos, int& nbr_caches, int& nbr_endpoints, int& nbr_requests, const vector<int>& endpoints, vector<int>& videos, vector<vector<int>>& network, vector<vector<int>>& requests, vector<vector<bool>>& results);
+int eval_time_saved(const ProblemData& problemData, const vector<vector<bool>>& results);
+Solution run_evol_algo(const ProblemData& problem);
+
 
 
 int main(){
 
-
-
     int line=0;
-    vector<int> videos;
-    vector<int> endpoints;
-    vector<int> caches;
-    int nbr_videos, nbr_endpoints, nbr_requests, nbr_caches ,cap_cache;
-
-
-    vector<vector<int>> network;
-    vector<vector<int>> requests;
+    ProblemData problemData;
     vector<vector<bool>> results;
-
 
     int endpoint_counter=0;
     
@@ -32,25 +39,24 @@ int main(){
     for (string s; getline(cin, s);) {
             istringstream stream(s);
             if(line==0){
-               stream >> nbr_videos ;
-                videos.resize(nbr_videos);
-                stream >> nbr_endpoints;
-                endpoints.resize(nbr_endpoints);
-                stream >> nbr_requests;
-                stream >> nbr_caches;
-                caches.resize(nbr_caches);
-                stream >> cap_cache;
+               stream >> problemData.nbr_videos ;
+                problemData.videos.resize(problemData.nbr_videos);
+                stream >> problemData.nbr_endpoints;
+                problemData.endpoints.resize(problemData.nbr_endpoints);
+                stream >> problemData.nbr_requests;
+                stream >> problemData.nbr_caches;
+                stream >> problemData.cap_cache;
 
-                network.resize(nbr_endpoints, vector<int>(nbr_caches, 0));
-                requests.resize(nbr_endpoints, vector<int>(nbr_videos, 0));
-                results.resize(nbr_caches, vector<bool>(nbr_videos, false));
+                problemData.network.resize(problemData.nbr_endpoints, vector<int>(problemData.nbr_caches, 0));
+                problemData.requests.resize(problemData.nbr_endpoints, vector<int>(problemData.nbr_videos, 0));
+                results.resize(problemData.nbr_caches, vector<bool>(problemData.nbr_videos, false));
             }else if(line==1){
-                for(int i =0; i<nbr_videos; i++)
+                for(int i =0; i<problemData.nbr_videos; i++)
                 {
-                    stream >> videos[i];
+                    stream >> problemData.videos[i];
                 }
-            }else if(line>1 && endpoint_counter != nbr_endpoints){
-                stream>> endpoints[endpoint_counter];
+            }else if(line>1 && endpoint_counter != problemData.nbr_endpoints){
+                stream>> problemData.endpoints[endpoint_counter];
                 int nb_caches_temp;
                 stream>> nb_caches_temp;
 
@@ -61,7 +67,7 @@ int main(){
 
                     int curr_cache;
                     stream>> curr_cache;
-                    stream >> network[endpoint_counter][curr_cache];
+                    stream >> problemData.network[endpoint_counter][curr_cache];
 
                 }
                 endpoint_counter++;
@@ -69,23 +75,23 @@ int main(){
                 int curr_endpoint,curr_video;
                 stream >> curr_video;
                 stream >> curr_endpoint;
-                stream >> requests[curr_endpoint][curr_video];
+                stream >> problemData.requests[curr_endpoint][curr_video];
             }
 
             line++;
         }
     
-        //Solution valide
-        for(int i=0; i<nbr_endpoints; i++){
-            for (int y = 0; y < nbr_videos; y++)
+        /*
+        for(int i=0; i<problemData.nbr_endpoints; i++){
+            for (int y = 0; y < problemData.nbr_videos; y++)
             {
-                if(requests[i][y]>0){
+                if(problemData.requests[i][y]>0){
                     //cout<<"Endpoint "<<i<<" has requested video "<<y<<" "<<requests[i][y]<<" times"<<endl;
                     bool already_in_cache=false;
-                    for (int c = 0; c < nbr_caches && !already_in_cache ; c++)
+                    for (int c = 0; c < problemData.nbr_caches && !already_in_cache ; c++)
                     {
                         //cout<<"Checking cache "<<c<<" for video "<<y<<"Network: "<<network[i][c]<<endl;
-                        if(network[i][c]>0 && constraint_checking(c,y,nbr_videos,cap_cache,videos,results)){
+                        if(problemData.network[i][c]>0 && constraint_checking(c,y,problemData,results)){
                             //cout<<"Adding video "<<y<<" to cache "<<c<<endl;
                             add_video_to_cache(c,y,results);
                             already_in_cache=true;
@@ -93,13 +99,13 @@ int main(){
                     }
                 }
             }  
-        }
+        }*/
        
         //Sortie des donnes
-        cout<<nbr_caches<<endl;
-        for(int i=0; i<nbr_caches;i++){
+        cout<<problemData.nbr_caches<<endl;
+        for(int i=0; i<problemData.nbr_caches;i++){
             cout<<i<<" ";
-            for(int y=0; y<nbr_videos; y++){
+            for(int y=0; y<problemData.nbr_videos; y++){
                 if(results[i][y]==true){
                     cout<<y<<" ";
                 }
@@ -107,33 +113,37 @@ int main(){
             cout<<endl;
         }
         
-        cout<<"Solution:"<< eval_time_saved(nbr_videos,nbr_caches,nbr_endpoints,nbr_requests,endpoints,videos,network,requests,results)<<endl;
+        cout<<"Solution:"<< eval_time_saved(problemData,results)<<endl;
+
+        cout << "Running Evolutionary Algorithm...\n";
+        Solution ea_solution = run_evol_algo(problemData);
+        cout << "EA Final Solution: " << eval_time_saved(problemData, ea_solution.results) << endl;
 }
 
 
 
-int eval_time_saved(int& nbr_videos, int& nbr_caches, int& nbr_endpoints, int& nbr_requests, const vector<int>& endpoints, vector<int>& videos, vector<vector<int>>& network, vector<vector<int>>& requests, vector<vector<bool>>& results){
+int eval_time_saved(const ProblemData& problemData,const vector<vector<bool>>& results){
     long long total_saved = 0;
     long long total_requests = 0;
 
-    for (int e = 0; e < nbr_endpoints; ++e) {
-        for (int v = 0; v < nbr_videos; ++v) {
-            int req_count = requests[e][v];
+    for (int e = 0; e < problemData.nbr_endpoints; ++e) {
+        for (int v = 0; v < problemData.nbr_videos; ++v) {
+            int req_count = problemData.requests[e][v];
             if (req_count <= 0) continue;
 
             total_requests += req_count;
 
-            int best_latency = endpoints[e]; //par défaut datacenter
+            int best_latency = problemData.endpoints[e]; //par défaut datacenter
 
-            for (int c = 0; c < nbr_caches; ++c) {
-                bool cache_connected = (network[e][c] > 0); // 0 = pas de lien
+            for (int c = 0; c < problemData.nbr_caches; ++c) {
+                bool cache_connected = (problemData.network[e][c] > 0); // 0 = pas de lien
                 bool video_in_cache = results[c][v];
                 if (cache_connected && video_in_cache) {
-                    best_latency = min(best_latency, network[e][c]);
+                    best_latency = min(best_latency, problemData.network[e][c]);
                 }
             }
 
-            int saved = endpoints[e] - best_latency; //latency serv->endpoint - latency cache->endpoint
+            int saved = problemData.endpoints[e] - best_latency; //latency serv->endpoint - latency cache->endpoint
             total_saved += saved*req_count;
         }
 
@@ -142,15 +152,15 @@ int eval_time_saved(int& nbr_videos, int& nbr_caches, int& nbr_endpoints, int& n
     return (total_saved*1000)/total_requests;
 }
 
-bool constraint_checking(int& cache, int& video, int& nbr_videos, int& cap_cache, vector<int>& videos, vector<vector<bool>>& results){
+bool constraint_checking(int& cache, int& video, ProblemData problem_data,vector<vector<bool>>& results){
     int cache_size=0;
-    for(int i=0; i<nbr_videos; i++){
+    for(int i=0; i<problem_data.nbr_videos; i++){
         if(results[cache][i]==true || i==video){
-            cache_size+=videos[i];
+            cache_size+=problem_data.videos[i];
         }
     }
     //cout<<"Cache: "<<cache_size<<" <=  "<<cap_cache<<endl;
-    return cache_size <= cap_cache;
+    return cache_size <= problem_data.cap_cache;
 }
 
 void add_video_to_cache(int& cache, int& video, vector<vector<bool>>& results){
