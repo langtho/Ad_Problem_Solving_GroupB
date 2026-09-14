@@ -114,7 +114,7 @@ void remove_video(Solution& s, const ProblemData& problem, int cache_id, int vid
     }
 }
 
-// Mutation operator
+// Mutation operator (experimental)
 Solution mutate_solution(const Solution& original, const ProblemData& problem, const std::function<double(void)>& rnd) {
     Solution mutated = original;
     int cache_idx = static_cast<int>(rnd() * problem.nbr_caches) % problem.nbr_caches;
