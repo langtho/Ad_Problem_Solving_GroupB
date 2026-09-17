@@ -1,26 +1,13 @@
+#ifndef GA
+#define GA
+
 #include <iostream>
 #include <vector>
 #include <functional>
 #include "openGA.hpp"
+#include "global.h"
 
 using namespace std;
-
-struct ProblemData {
-    int nbr_videos = 0;
-    int nbr_endpoints = 0;
-    int nbr_requests = 0;
-    int nbr_caches = 0;
-    int cap_cache = 0;
-    std::vector<int> videos;
-    std::vector<int> endpoints;
-    std::vector<std::vector<int>> network;
-    std::vector<std::vector<int>> requests;
-};
-
-struct Solution {
-    vector<vector<bool>> results;
-    std::vector<int> used_capacity;
-};
 
 using GA_Engine = EA::Genetic<Solution, double>;
 
@@ -31,6 +18,8 @@ void add_video(Solution& s, const ProblemData& problem, int cache_id, int video_
 void remove_video(Solution& s, const ProblemData& problem, int cache_id, int video_id);
 Solution mutate_solution(const Solution& original, const ProblemData& problem, const std::function<double(void)>& rnd);
 void show_generation_summary(int generation_number, const GA_Engine::thisGenerationType& generation, const Solution& best_solution);
+Solution crossover_solution(const Solution& p1, const Solution& p2, const ProblemData& problem, const std::function<double(void)>& rnd);
+
 
 int eval_time_saved(const ProblemData& problemData, const vector<vector<bool>>& results);
 
@@ -64,13 +53,16 @@ Solution run_evol_algo(const ProblemData& problem) {
         return mutate_solution(s, problem, rnd);
     };
 
-    ga.crossover = [](const Solution& p1, const Solution& p2, const std::function<double(void)>& rnd) -> Solution {
-        return p1;
+    ga.crossover = [&problem](const Solution& p1, const Solution& p2, const std::function<double(void)>& rnd) -> Solution {
+        return crossover_solution(p1, p2, problem, rnd);
     };
+
 
     ga.SO_report_generation = [](int gen, const GA_Engine::thisGenerationType& gen_obj, const Solution& best_sol) {
         show_generation_summary(gen, gen_obj, best_sol);
     };
+
+
 
     ga.solve();
 
@@ -128,6 +120,24 @@ Solution mutate_solution(const Solution& original, const ProblemData& problem, c
     return mutated;
 }
 
+Solution crossover_solution(const Solution& p1, const Solution& p2, const ProblemData& problem, const std::function<double(void)>& rnd) {
+    Solution child;
+    child.results.assign(problem.nbr_caches, std::vector<bool>(problem.nbr_videos, false));
+    child.used_capacity.assign(problem.nbr_caches, 0);
+
+    for (int c = 0; c < problem.nbr_caches; ++c) {
+        for (int v = 0; v < problem.nbr_videos; ++v) {
+            bool bit = (rnd() < 0.5) ? p1.results[c][v] : p2.results[c][v];
+
+            if (bit && can_add_video(child, problem, c, v)) {
+                add_video(child, problem, c, v);
+            }
+        }
+    }
+
+    return child;
+}
+
 void show_generation_summary(int generation_number,
                              const GA_Engine::thisGenerationType& generation,
                              const Solution& best_solution) {
@@ -139,3 +149,6 @@ void show_generation_summary(int generation_number,
               << " | Avg saved: " << avg_time_saved
               << "\n";
 }
+
+
+#endif

@@ -1,31 +1,16 @@
+#ifndef MAIN
+#define MAIN
+
 #include <iostream>
 #include <string>
 #include <sstream>
 #include <vector>
+#include "global.h"
 
-struct ProblemData {
-    int nbr_videos=0;
-    int nbr_endpoints=0;
-    int nbr_requests=0;
-    int nbr_caches=0;
-    int cap_cache=0;
-    std::vector<int> videos;
-    std::vector<int> endpoints;
-    std::vector<std::vector<int>> network;
-    std::vector<std::vector<int>> requests;
-};
-struct Solution {
-    std::vector<std::vector<bool>> results;
-    std::vector<int> used_capacity;
-};
 
 using namespace std;
 bool constraint_checking(int& cache, int& video, int& nbr_videos, int& cap_cache, vector<int>& videos, vector<vector<bool>>& results);
 void add_video_to_cache(int& cache, int& video, vector<vector<bool>>& results);
-int eval_time_saved(const ProblemData& problemData, const vector<vector<bool>>& results);
-Solution run_evol_algo(const ProblemData& problem);
-
-
 
 int main(){
 
@@ -81,43 +66,19 @@ int main(){
             line++;
         }
     
-        /*
-        for(int i=0; i<problemData.nbr_endpoints; i++){
-            for (int y = 0; y < problemData.nbr_videos; y++)
-            {
-                if(problemData.requests[i][y]>0){
-                    //cout<<"Endpoint "<<i<<" has requested video "<<y<<" "<<requests[i][y]<<" times"<<endl;
-                    bool already_in_cache=false;
-                    for (int c = 0; c < problemData.nbr_caches && !already_in_cache ; c++)
-                    {
-                        //cout<<"Checking cache "<<c<<" for video "<<y<<"Network: "<<network[i][c]<<endl;
-                        if(problemData.network[i][c]>0 && constraint_checking(c,y,problemData,results)){
-                            //cout<<"Adding video "<<y<<" to cache "<<c<<endl;
-                            add_video_to_cache(c,y,results);
-                            already_in_cache=true;
-                        }
-                    }
-                }
-            }  
-        }*/
+        Solution sol = run_evol_algo(problemData);
        
         //Sortie des donnes
         cout<<problemData.nbr_caches<<endl;
         for(int i=0; i<problemData.nbr_caches;i++){
             cout<<i<<" ";
             for(int y=0; y<problemData.nbr_videos; y++){
-                if(results[i][y]==true){
+                if(sol.results[i][y]==true){
                     cout<<y<<" ";
                 }
             }
             cout<<endl;
         }
-        
-        cout<<"Solution:"<< eval_time_saved(problemData,results)<<endl;
-
-        cout << "Running Evolutionary Algorithm...\n";
-        Solution ea_solution = run_evol_algo(problemData);
-        cout << "EA Final Solution: " << eval_time_saved(problemData, ea_solution.results) << endl;
 }
 
 
@@ -166,3 +127,5 @@ bool constraint_checking(int& cache, int& video, ProblemData problem_data,vector
 void add_video_to_cache(int& cache, int& video, vector<vector<bool>>& results){
     results[cache][video]=true;
 }
+
+#endif
