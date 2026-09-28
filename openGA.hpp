@@ -327,7 +327,7 @@ public:
 
 	////////////////////////////////////////////////////
 
-	Genetic() :
+	Genetic(uint64_t fixed_seed = 0) :
 		unif_dist(0.0,1.0),
 		N_robj(0),
 		problem_mode(GA_MODE::SOGA),
@@ -364,9 +364,13 @@ public:
 		get_shrink_scale(default_shrink_scale)
 	{
 		// initialize the random number generator with time-dependent seed
-		uint64_t timeSeed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-		std::seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed>>32)};
-		rng.seed(ss);
+		if (fixed_seed == 0) {
+			uint64_t timeSeed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+			std::seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed>>32)};
+			rng.seed(ss);
+		} else {
+			rng.seed(fixed_seed);
+		}
 		std::uniform_real_distribution<double> unif(0, 1);
 		if(N_threads==0) // number of CPU cores not detected.
 			N_threads=8;
@@ -392,6 +396,9 @@ public:
 			N_robj=(unsigned int)g.chromosomes[0].objectives.size();
 		if(!N_robj)
 			throw runtime_error("Number of the reduced objective is zero");
+	}
+	void set_seed(uint64_t val) {
+		rng.seed(val);
 	}
 
 	void solve_init()
@@ -1450,7 +1457,7 @@ protected:
 	* less far thread overhhead. However, as the thread
 	* allocation is not dynamic, the whole process waits 
 	* for the worst-case-scenario thread. 
-	****************************************************/
+	**************************************{**************/
 	template <void (thisType::*action_function)(thisGenerationType *p_generation0,int index_from,int index_to,unsigned int *attemps,std::atomic<bool> &active_thread)>
 	void static_thread_action(
 		thisGenerationType &generation,

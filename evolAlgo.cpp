@@ -26,6 +26,9 @@ int eval_time_saved(const ProblemData& problemData, const vector<vector<bool>>& 
 Solution run_evol_algo(const ProblemData& problem) {
     GA_Engine ga;
 
+    ga.set_seed(42);
+    ga.multi_threading=false;
+
     ga.problem_mode = EA::GA_MODE::SOGA;
     ga.population = 30;
     ga.generation_max = 50;
