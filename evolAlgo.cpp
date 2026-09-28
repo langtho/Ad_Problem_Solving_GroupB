@@ -39,12 +39,28 @@ Solution run_evol_algo(const ProblemData& problem) {
     ga.elite_count = 2;
     ga.verbose = false;
 
+    // Eval tracker
+    int eval_count = 0;
+    double best_fitness = -1.0;
+    int next_target = 1;
+    std::vector<std::pair<int, double>> history;
+
     ga.init_genes = [&problem](Solution& s, const std::function<double(void)>& rnd) {
         init_genes(s, problem, rnd);
     };
 
-    ga.eval_solution = [&problem](const Solution& s, double& score) -> bool {
+    ga.eval_solution = [&problem, &eval_count, &best_fitness, &next_target, &ga,&history](const Solution& s, double& score) -> bool {
         score = static_cast<double>(eval_time_saved(problem, s.results));
+
+        if (score>best_fitness)
+        {
+            best_fitness=score;
+        }
+        eval_count++;
+        if (eval_count == next_target) {
+            history.push_back({eval_count, best_fitness});
+            next_target += ga.population;
+        }
         return true;
     };
 
@@ -68,7 +84,7 @@ Solution run_evol_algo(const ProblemData& problem) {
 
 
     ga.solve();
-
+    generate_json_output(history);
     return ga.last_generation.chromosomes[ga.last_generation.best_chromosome_index].genes;
 }
 
