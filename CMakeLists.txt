@@ -18,5 +18,5 @@ add_executable(solver sol.cpp evolAlgo.cpp
 target_link_libraries(solver PRIVATE Threads::Threads)
 
 add_executable(judge
-        "judgeHashCode2017.cpp"
+        "Utils/judgeHashCode2017.cpp"
 )

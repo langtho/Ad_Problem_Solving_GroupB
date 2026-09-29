@@ -23,7 +23,7 @@ Solution crossover_solution(const Solution& p1, const Solution& p2, const Proble
 
 int eval_time_saved(const ProblemData& problemData, const vector<vector<bool>>& results);
 
-Solution run_evol_algo(const ProblemData& problem) {
+Solution run_evol_algo(const ProblemData& problem, double best_known_value, const std::string& instance_name) {
     GA_Engine ga;
 
     ga.set_seed(42);
@@ -39,17 +39,23 @@ Solution run_evol_algo(const ProblemData& problem) {
     ga.elite_count = 2;
     ga.verbose = false;
 
+
+    vector<double> targets = generate_targets(best_known_value, 50);
+
     // Eval tracker
     int eval_count = 0;
     double best_fitness = -1.0;
-    int next_target = 1;
+    int current_target_idx = 0;
+    int current_gen=0;
     std::vector<std::pair<int, double>> history;
+
+    auto start_time = std::chrono::high_resolution_clock::now();
 
     ga.init_genes = [&problem](Solution& s, const std::function<double(void)>& rnd) {
         init_genes(s, problem, rnd);
     };
 
-    ga.eval_solution = [&problem, &eval_count, &best_fitness, &next_target, &ga,&history](const Solution& s, double& score) -> bool {
+    ga.eval_solution = [&problem, &eval_count, &best_fitness, &current_target_idx, &targets,&history](const Solution& s, double& score) -> bool {
         score = static_cast<double>(eval_time_saved(problem, s.results));
 
         if (score>best_fitness)
@@ -57,9 +63,9 @@ Solution run_evol_algo(const ProblemData& problem) {
             best_fitness=score;
         }
         eval_count++;
-        if (eval_count == next_target) {
-            history.push_back({eval_count, best_fitness});
-            next_target += ga.population;
+        while (current_target_idx < targets.size() && best_fitness >= targets[current_target_idx]) {
+            history.push_back({eval_count, targets[current_target_idx]});
+            current_target_idx++;
         }
         return true;
     };
@@ -77,14 +83,19 @@ Solution run_evol_algo(const ProblemData& problem) {
     };
 
 
-    ga.SO_report_generation = [](int gen, const GA_Engine::thisGenerationType& gen_obj, const Solution& best_sol) {
+    ga.SO_report_generation = [&current_gen](int gen, const GA_Engine::thisGenerationType& gen_obj, const Solution& best_sol) {
+        current_gen = gen;
         show_generation_summary(gen, gen_obj, best_sol);
     };
 
 
 
     ga.solve();
-    generate_json_output(history);
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end_time - start_time;
+
+    generate_json_output(instance_name,history,eval_count,current_gen,best_fitness,elapsed.count(),ga.population,"benchmark_results");
     return ga.last_generation.chromosomes[ga.last_generation.best_chromosome_index].genes;
 }
 
@@ -168,6 +179,5 @@ void show_generation_summary(int generation_number,
               << " | Avg saved: " << avg_time_saved
               << "\n";
 }
-
 
 #endif
