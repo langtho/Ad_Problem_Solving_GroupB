@@ -5,11 +5,16 @@
 #include <string>
 #include <sstream>
 #include <vector>
+<<<<<<< HEAD
 #include <memory>
 #include "Solver_Interface.h"
 #include "Sequence_Solver.h"
 #include "Matrix_Solver.h"
+=======
+#include <cstdlib>
+>>>>>>> 66f1bfd8d409475992555c8bc6063cf62fe5c676
 #include "global.h"
+#include "greedy.h"
 
 
 using namespace std;
