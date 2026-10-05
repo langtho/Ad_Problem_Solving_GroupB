@@ -11,8 +11,11 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 find_package(Threads REQUIRED)
 
 # Add both source files into one executable
-add_executable(solver sol.cpp evolAlgo.cpp
-        global.h)
+add_executable(solver sol.cpp matrixSolver.cpp sequenceSolver.cpp
+        global.h
+        Solver_Interface.h
+        Sequence_Solver.h
+        Matrix_Solver.h)
 
 # Link pthread to the target
 target_link_libraries(solver PRIVATE Threads::Threads)

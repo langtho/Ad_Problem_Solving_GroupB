@@ -26,14 +26,15 @@ struct ProblemData {
 };
 
 struct Solution {
+    std::vector<int> sequence;
     std::vector<std::vector<bool>> results;
     std::vector<int> used_capacity;
 };
 
-
-
 int eval_time_saved(const ProblemData& problemData, const std::vector<std::vector<bool>>& results);
 Solution run_evol_algo(const ProblemData& problem, double best_known_value, const std::string& instance_name);
+Solution run_evol_algo_newEncoding(const ProblemData& problem, double best_known_value, const std::string& instance_name);
+
 
 inline vector<double> generate_targets(const double current_best_value, const int number_targets)
 {
@@ -85,5 +86,7 @@ inline void generate_json_output(string instance_name, const std::vector<std::pa
     out << "}\n";
     out.close();
 }
+
+
 
 #endif //CACHEPROBLEM_GLOBAL_H
