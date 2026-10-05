@@ -5,16 +5,11 @@
 #include <string>
 #include <sstream>
 #include <vector>
-<<<<<<< HEAD
 #include <memory>
 #include "Solver_Interface.h"
 #include "Sequence_Solver.h"
 #include "Matrix_Solver.h"
-=======
-#include <cstdlib>
->>>>>>> 66f1bfd8d409475992555c8bc6063cf62fe5c676
 #include "global.h"
-#include "greedy.h"
 
 
 using namespace std;
@@ -40,8 +35,8 @@ int main(int argc, char* argv[])
 
     ProblemData problemData = read_problem_data();
 
-        std::unique_ptr<ISolver> solver = std::make_unique<MatrixSolver>();
-    //std::unique_ptr<ISolver> solver = std::make_unique<SequenceSolver>();
+        //std::unique_ptr<ISolver> solver = std::make_unique<MatrixSolver>();
+    std::unique_ptr<ISolver> solver = std::make_unique<SequenceSolver>();
     Solution sol = solver->run(problemData, best_known_value, instance_name);
 
     //Sortie des donnes

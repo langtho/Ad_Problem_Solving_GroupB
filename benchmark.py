@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 BEST_KNOWN_VALUES = {
+    "instances/instances/custom_medium_flat_dense_dejavu_13_seed54.in": 1022556,
     #"instances/instances/kittens.in": 1022556,
     #"instances/instances/me_at_the_zoo.in": 507906,
     #"instances/instances/trending_today.in": 499991,
@@ -14,8 +15,9 @@ BEST_KNOWN_VALUES = {
     #"instances/instances/custom_dejavu42.in": 196131,
     #"instances/instances/custom_universallambda42.in": 1342673,
     #"instances/instances/custom_universallambda42_asymmetric.in": 975514,
-    "instances/instances/instance1.in": 1498093,
-    "instances/instances/instance2.in": 1971053,
+    #"instances/instances/instance1.in": 1498093,
+    #"instances/instances/instance2.in": 1971053,
+
 }
 
 EXECUTABLE = "./cmake-build-debug/solver"
