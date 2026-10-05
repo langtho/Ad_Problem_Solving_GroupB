@@ -5,14 +5,22 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <cstdlib>
 #include "global.h"
+#include "greedy.h"
 
 
 using namespace std;
 bool constraint_checking(int& cache, int& video, int& nbr_videos, int& cap_cache, vector<int>& videos, vector<vector<bool>>& results);
 void add_video_to_cache(int& cache, int& video, vector<vector<bool>>& results);
 
-int main(){
+// Usage: solver [best_known_value] [instance_name] [method] < instance.in
+//   method = ga (default, matrix encoding) | greedy | ga_perm (permutation encoding + greedy decoder)
+int main(int argc, char* argv[]){
+
+    double best_known_value = (argc > 1) ? atof(argv[1]) : 0;
+    string instance_name = (argc > 2) ? argv[2] : "instance";
+    string method = (argc > 3) ? argv[3] : "ga";
 
     int line=0;
     ProblemData problemData;
@@ -57,16 +65,25 @@ int main(){
                 }
                 endpoint_counter++;
             }else{
-                int curr_endpoint,curr_video;
+                int curr_endpoint,curr_video,curr_count;
                 stream >> curr_video;
                 stream >> curr_endpoint;
-                stream >> problemData.requests[curr_endpoint][curr_video];
+                stream >> curr_count;
+                // the same (video, endpoint) pair can appear on several lines: the counts add up
+                problemData.requests[curr_endpoint][curr_video] += curr_count;
             }
 
             line++;
         }
     
-        Solution sol = run_evol_algo(problemData);
+        Solution sol;
+        if (method == "greedy") {
+            sol = run_greedy(problemData, best_known_value, instance_name + "_greedy");
+        } else if (method == "ga_perm") {
+            sol = run_evol_algo_perm(problemData, best_known_value, instance_name + "_ga_perm");
+        } else {
+            sol = run_evol_algo(problemData, best_known_value, instance_name);
+        }
        
         //Sortie des donnes
         cout<<problemData.nbr_caches<<endl;

@@ -262,7 +262,7 @@ public:
 
 };
 
-std::mutex mtx_rand;
+inline std::mutex mtx_rand; // inline: openGA.hpp is included by several .cpp files
 
 template<typename GeneType,typename MiddleCostType>
 class Genetic
