@@ -9,6 +9,7 @@
 #include <vector>
 #include <fstream>
 #include <cmath>
+#include <filesystem>
 #include <utility>
 
 using namespace std;
@@ -36,6 +37,9 @@ Solution run_evol_algo(const ProblemData& problem, double best_known_value, cons
 Solution run_evol_algo_newEncoding(const ProblemData& problem, double best_known_value, const std::string& instance_name);
 
 
+
+
+
 inline vector<double> generate_targets(const double current_best_value, const int number_targets)
 {
     std::vector<double> targets;
@@ -53,16 +57,63 @@ inline vector<double> generate_targets(const double current_best_value, const in
     return targets;
 }
 
-inline void generate_json_output(string instance_name, const std::vector<std::pair<int, double>>& data, int total_evals, int total_gens, double best_achieved, double total_seconds, int pop_size,const std::string& output_dir = ".") {
+
+inline void generate_json_output(
+    string instance_name,
+    const std::vector<std::pair<int, double>>& data,
+    int total_evals,
+    int total_gens,
+    double best_achieved,
+    double total_seconds,
+    int pop_size,
+    const std::string& output_dir = ".",
+    int init_strategy_id = 0,
+    int active_k = 0,
+    double gen_0_best = 0.0,
+    double gen_0_mean = 0.0,
+    double d0 = 0.0,
+    int crossover_strategy_id = 0,
+    double cx_success_rate = 0.0,
+    double cx_neutral_rate = 0.0,
+    int mutation_strategy_id = 0,
+    double mut_success_rate = 0.0,
+    double mut_neutral_rate = 0.0,
+    int local_search_strategy_id = 0,
+    double ls_success_rate = 0.0,
+    double ls_avg_delta = 0.0,
+    int decoding_strategy_id = 0,
+    double avg_eval_us = 0.0,
+    double cache_utilization = 0.0
+) {
+    std::error_code ec;
+    std::filesystem::create_directories(output_dir, ec);
 
     std::string filename = output_dir + "/fitness_plot_" + instance_name + ".json";
 
-
     std::ofstream out(filename);
-    if (!out) return;
+    if (!out) {
+        return;
+    }
 
     out << "{\n";
     out << "  \"instance\": \"" << instance_name << "\",\n";
+    out << "  \"init_strategy_id\": " << init_strategy_id << ",\n";
+    out << "  \"crossover_strategy_id\": " << crossover_strategy_id << ",\n";
+    out << "  \"mutation_strategy_id\": " << mutation_strategy_id << ",\n";
+    out << "  \"local_search_strategy_id\": " << local_search_strategy_id << ",\n";
+    out << "  \"decoding_strategy_id\": " << decoding_strategy_id << ",\n";
+    out << "  \"active_prefix_k\": " << active_k << ",\n";
+    out << "  \"gen_0_best_score\": " << gen_0_best << ",\n";
+    out << "  \"gen_0_mean_score\": " << gen_0_mean << ",\n";
+    out << "  \"gen_0_diversity_d0\": " << d0 << ",\n";
+    out << "  \"crossover_success_rate\": " << cx_success_rate << ",\n";
+    out << "  \"crossover_neutral_rate\": " << cx_neutral_rate << ",\n";
+    out << "  \"mutation_success_rate\": " << mut_success_rate << ",\n";
+    out << "  \"mutation_neutral_rate\": " << mut_neutral_rate << ",\n";
+    out << "  \"local_search_success_rate\": " << ls_success_rate << ",\n";
+    out << "  \"local_search_avg_delta\": " << ls_avg_delta << ",\n";
+    out << "  \"avg_eval_microseconds\": " << avg_eval_us << ",\n";
+    out << "  \"cache_utilization_ratio\": " << cache_utilization << ",\n";
     out << "  \"total_evaluations\": " << total_evals << ",\n";
     out << "  \"total_generations\": " << total_gens << ",\n";
     out << "  \"population_size\": " << pop_size << ",\n";
@@ -86,7 +137,5 @@ inline void generate_json_output(string instance_name, const std::vector<std::pa
     out << "}\n";
     out.close();
 }
-
-
 
 #endif //CACHEPROBLEM_GLOBAL_H

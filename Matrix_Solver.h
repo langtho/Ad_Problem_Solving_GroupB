@@ -19,6 +19,7 @@ private:
     void remove_video(Solution& s, const ProblemData& problem, int cache_id, int video_id);
     Solution mutate_solution(const Solution& original, const ProblemData& problem, const std::function<double(void)>& rnd);
     Solution crossover_solution(const Solution& p1, const Solution& p2, const ProblemData& problem, const std::function<double(void)>& rnd);
+
 };
 
 #endif

@@ -6,12 +6,19 @@
 #include <vector>
 #include "global.h"
 
-// Greedy decoder: fills the caches by following an order of videos.
-// The caches are filled in rounds: in each round, every video (in the given
-// order) is added to the cache where it saves the most time, if it still saves
-// time and fits. A video gets a second copy only in the next round, after every
-// other video had a chance to get a place.
-// Used alone (greedy method) and inside the permutation GA (option 2).
+enum class DecodingStrategy {
+    STATIC_GREEDY,            // 0: Standard greedy decoder
+    SOFT_SLACK_REPAIRED,      // 1: Soft capacity overflow + deterministic tail repair
+    DEMAND_CACHE_CENTRIC,     // 2: Demand-weighted cache packing
+    FIXED_THRESHOLD_PROFILE,  // 3: Static O(1) gate filters
+    CO_EVOLVED_THRESHOLDS     // 4: Chromosome co-evolved threshold gates
+};
+
+struct DecodeParams {
+    DecodingStrategy strategy = DecodingStrategy::STATIC_GREEDY;
+    double tau_density = 0.0;  // Min gain/MB gate threshold
+    double tau_reserve = 0.0;  // Reserved capacity fraction for top items
+};
 class GreedyDecoder {
 public:
     explicit GreedyDecoder(const ProblemData& problem);
@@ -25,9 +32,10 @@ public:
     // Candidate videos sorted by decreasing priority
     std::vector<int> priority_order() const;
 
-    // Fills the caches following `order` and returns the score (same formula as eval_time_saved).
-    // If `solution` is given, the placement is written into it.
     long long decode(const std::vector<int>& order, Solution* solution = nullptr);
+
+    // Block 5 Extended Decode Engine
+    long long decode(const std::vector<int>& order, Solution* solution, const DecodeParams& params);
 
 private:
     const ProblemData& problem;
@@ -49,6 +57,10 @@ private:
     std::vector<int> used_capacity;     // MB used in each cache
     std::vector<long long> cache_gain;  // time saved by adding the current video to each cache
     std::vector<int> touched_caches;
+
+    long long decode_static_greedy(const std::vector<int>& order, Solution* solution, const DecodeParams& params);
+    long long decode_soft_slack_repaired(const std::vector<int>& order, Solution* solution);
+    long long decode_demand_cache_centric(const std::vector<int>& order, Solution* solution);
 };
 
 Solution run_greedy(const ProblemData& problem, double best_known_value, const std::string& instance_name);

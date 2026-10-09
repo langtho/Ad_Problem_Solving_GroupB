@@ -10,8 +10,11 @@
 
 class ISolver {
 public:
+
     virtual ~ISolver() = default;
     virtual Solution run(const ProblemData& problem, double best_known_value, const std::string& instance_name) = 0;
+
+
 };
 
 #endif //CACHEPROBLEM_SOLVER_INTERFACE_H

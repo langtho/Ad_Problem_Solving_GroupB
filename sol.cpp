@@ -33,11 +33,40 @@ int main(int argc, char* argv[])
         instance_name = argv[2];
     }
 
+
+    InitStrategy init_strat = InitStrategy::BASELINE_EXACT_NOISY;           // ID 2
+    CrossoverStrategy cx_strat = CrossoverStrategy::POSITION_BASED_POS;     // ID 1
+    MutationStrategy mut_strat = MutationStrategy::BOUNDARY_SWAP; // ID 2
+    LocalSearchStrategy ls_strat = LocalSearchStrategy::FIRST_IMPROVEMENT_SWAP; // ID 1
+    DecodingStrategy dec_strat = DecodingStrategy::CO_EVOLVED_THRESHOLDS;          // ID 0
+
+    // Parse strategy overrides if passed via CLI by benchmark.py
+    if (argc >= 4 && argv[3] != nullptr) init_strat = static_cast<InitStrategy>(stoi(argv[3]));
+    if (argc >= 5 && argv[4] != nullptr) cx_strat   = static_cast<CrossoverStrategy>(stoi(argv[4]));
+    if (argc >= 6 && argv[5] != nullptr) mut_strat  = static_cast<MutationStrategy>(stoi(argv[5]));
+    if (argc >= 7 && argv[6] != nullptr) ls_strat   = static_cast<LocalSearchStrategy>(stoi(argv[6]));
+    if (argc >= 8 && argv[7] != nullptr) dec_strat  = static_cast<DecodingStrategy>(stoi(argv[7]));
+
+
     ProblemData problemData = read_problem_data();
 
-        //std::unique_ptr<ISolver> solver = std::make_unique<MatrixSolver>();
-    std::unique_ptr<ISolver> solver = std::make_unique<SequenceSolver>();
-    Solution sol = solver->run(problemData, best_known_value, instance_name);
+    SequenceSolver solver;
+    string run_name = instance_name + "_init" + to_string(static_cast<int>(init_strat))
+                                    + "_cx"   + to_string(static_cast<int>(cx_strat))
+                                    + "_mut"  + to_string(static_cast<int>(mut_strat))
+                                    + "_ls"   + to_string(static_cast<int>(ls_strat))
+                                    + "_dec"  + to_string(static_cast<int>(dec_strat));
+    Solution sol = solver.run_benchmark(
+        problemData,
+        best_known_value,
+        run_name,
+        init_strat,
+        cx_strat,
+        mut_strat,
+        ls_strat,
+        dec_strat
+    );
+
 
     //Sortie des donnes
     cout << problemData.nbr_caches << endl;
