@@ -32,7 +32,9 @@ enum class CrossoverStrategy {
     ACTIVE_PREFIX_OX1,
     POSITION_BASED_POS,
     PARTIALLY_MAPPED_PMX,
-    CYCLE_CROSSOVER_CX
+    CYCLE_CROSSOVER_CX,
+    ACTIVE_PREFIX_PPX,
+    ACTIVE_SET_CROSSOVER
 };
 
 enum class MutationStrategy {
@@ -40,7 +42,8 @@ enum class MutationStrategy {
     ACTIVE_PREFIX_SWAP,
     ACTIVE_PREFIX_INVERSION,
     ACTIVE_PREFIX_INSERTION,
-    BOUNDARY_SWAP
+    BOUNDARY_SWAP,
+    PROMOTE_UNPLACED
 };
 
 enum class LocalSearchStrategy {
@@ -58,7 +61,7 @@ class SequenceSolver : public ISolver {
 public:
     Solution run(const ProblemData& problem, double best_known_value, const std::string& instance_name) override;
 
-    Solution run_benchmark( const ProblemData& problem, double best_known_value, const std::string& instance_name, InitStrategy init_strat = InitStrategy::BASELINE_EXACT_NOISY,  CrossoverStrategy = CrossoverStrategy::BASELINE_OX1,MutationStrategy mut_strat = MutationStrategy::BASELINE_SWAP,LocalSearchStrategy ls_strat = LocalSearchStrategy::NONE,DecodingStrategy dec_strat = DecodingStrategy::STATIC_GREEDY);
+    Solution run_benchmark( const ProblemData& problem, double best_known_value, const std::string& instance_name, InitStrategy init_strat = InitStrategy::BASELINE_EXACT_NOISY,  CrossoverStrategy = CrossoverStrategy::BASELINE_OX1,MutationStrategy mut_strat = MutationStrategy::BASELINE_SWAP,LocalSearchStrategy ls_strat = LocalSearchStrategy::NONE,DecodingStrategy dec_strat = DecodingStrategy::STATIC_GREEDY, unsigned int seed = 42);
 
     VideoOrder generate_initial_individual(
         InitStrategy strategy,
@@ -84,7 +87,8 @@ public:
         MutationStrategy strategy,
         const VideoOrder& original,
         int active_k,
-        const std::function<double(void)>& rnd
+        const std::function<double(void)>& rnd,
+        const std::vector<char>* placed = nullptr
     );
 
     VideoOrder execute_local_search(
@@ -112,8 +116,10 @@ private:
     VideoOrder order_crossover(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos, const std::function<double(void)>& rnd);
     VideoOrder active_prefix_ox1(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos, int active_k, const std::function<double(void)>& rnd);
     VideoOrder position_based_crossover(const VideoOrder& p1, const VideoOrder& p2,int nbr_videos, const std::function<double(void)>& rnd);
-    VideoOrder partially_mapped_crossover(const VideoOrder& p1, const VideoOrder& p2, int active_k, const std::function<double(void)>& rnd);
-    VideoOrder cycle_crossover(const VideoOrder& p1, const VideoOrder& p2);
+    VideoOrder partially_mapped_crossover(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos, int active_k, const std::function<double(void)>& rnd);
+    VideoOrder cycle_crossover(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos);
+    VideoOrder active_prefix_ppx(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos, int active_k, const std::function<double(void)>& rnd);
+    VideoOrder active_set_crossover(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos, int active_k, const std::function<double(void)>& rnd);
 
 
     VideoOrder swap_mutation(const VideoOrder& original, const std::function<double(void)>& rnd);
@@ -121,6 +127,7 @@ private:
     VideoOrder active_prefix_inversion(const VideoOrder& original, int active_k, const std::function<double(void)>& rnd);
     VideoOrder active_prefix_insertion(const VideoOrder& original, int active_k, const std::function<double(void)>& rnd);
     VideoOrder boundary_swap(const VideoOrder& original, int active_k, const std::function<double(void)>& rnd);
+    VideoOrder promote_unplaced(const VideoOrder& original, const std::vector<char>& placed, const std::function<double(void)>& rnd);
 
     VideoOrder ls_first_improvement_swap( VideoOrder& input,  GreedyDecoder& decoder, int active_k, long long& evals, double& gain);
     VideoOrder ls_best_improvement_insert( VideoOrder& input,  GreedyDecoder& decoder, int active_k, long long& evals, double& gain);

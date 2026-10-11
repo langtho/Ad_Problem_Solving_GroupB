@@ -20,14 +20,15 @@ Solution SequenceSolver::run_benchmark(
     CrossoverStrategy cx_strat,
     MutationStrategy mut_strat,
     LocalSearchStrategy ls_strat,
-    DecodingStrategy dec_strat
+    DecodingStrategy dec_strat,
+    unsigned int seed
 ) {
     auto start_time = chrono::high_resolution_clock::now();
 
     GreedyDecoder decoder(problem);
     Perm_Engine ga;
 
-    ga.set_seed(42);
+    ga.set_seed(seed);
     ga.multi_threading = false;
     ga.problem_mode = EA::GA_MODE::SOGA;
     ga.population = 30;
@@ -120,7 +121,9 @@ Solution SequenceSolver::run_benchmark(
     };
 
     ga.mutate = [this, active_k, mut_strat, dec_strat, &decoder, &total_mutations, &successful_mutations, &neutral_mutations](const VideoOrder& s, const function<double(void)>& rnd, double shrink_scale) -> VideoOrder {
-        VideoOrder mutated = execute_mutation(mut_strat, s, active_k, rnd);
+        // Decoded first: PROMOTE_UNPLACED reads which videos the decoder placed
+        long long orig_score = decoder.decode(s.videos);
+        VideoOrder mutated = execute_mutation(mut_strat, s, active_k, rnd, &decoder.last_placed());
 
         // Co-evolve thresholds via Gaussian perturbation
         if (dec_strat == DecodingStrategy::CO_EVOLVED_THRESHOLDS) {
@@ -129,7 +132,6 @@ Solution SequenceSolver::run_benchmark(
             mutated.thresholds[1] = max(0.0, min(0.3, mutated.thresholds[1] + (rnd() - 0.5) * 0.05));
         }
 
-        long long orig_score = decoder.decode(s.videos);
         long long mut_score = decoder.decode(mutated.videos);
 
         total_mutations++;
@@ -572,7 +574,7 @@ VideoOrder SequenceSolver::position_based_crossover(
     return child;
 }
 
-VideoOrder SequenceSolver::partially_mapped_crossover(const VideoOrder& p1, const VideoOrder& p2, int active_k, const function<double(void)>& rnd) {
+VideoOrder SequenceSolver::partially_mapped_crossover(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos, int active_k, const function<double(void)>& rnd) {
     int n = p1.videos.size();
     VideoOrder child = p1;
     if (n == 0) return child;
@@ -582,7 +584,8 @@ VideoOrder SequenceSolver::partially_mapped_crossover(const VideoOrder& p1, cons
     int b = static_cast<int>(rnd() * window) % window;
     if (a > b) swap(a, b);
 
-    vector<int> pos_in_child(n);
+    // Indexed by video id, which can exceed the number of candidates
+    vector<int> pos_in_child(nbr_videos, -1);
     for (int i = 0; i < n; ++i) pos_in_child[child.videos[i]] = i;
 
     for (int i = a; i <= b; ++i) {
@@ -599,13 +602,14 @@ VideoOrder SequenceSolver::partially_mapped_crossover(const VideoOrder& p1, cons
     return child;
 }
 
-VideoOrder SequenceSolver::cycle_crossover(const VideoOrder& p1, const VideoOrder& p2) {
+VideoOrder SequenceSolver::cycle_crossover(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos) {
     int n = p1.videos.size();
     VideoOrder child;
     child.videos.assign(n, -1);
     if (n == 0) return child;
 
-    vector<int> pos_p1(n);
+    // Indexed by video id, which can exceed the number of candidates
+    vector<int> pos_p1(nbr_videos, -1);
     for (int i = 0; i < n; ++i) pos_p1[p1.videos[i]] = i;
 
     int start_idx = 0;
@@ -620,6 +624,89 @@ VideoOrder SequenceSolver::cycle_crossover(const VideoOrder& p1, const VideoOrde
         if (child.videos[i] == -1) {
             child.videos[i] = p2.videos[i];
         }
+    }
+    return child;
+}
+
+// Precedence Preservative Crossover restricted to the active prefix:
+// each prefix slot takes the first unused video of a randomly chosen parent,
+// so a video placed early in either parent stays early in the child.
+VideoOrder SequenceSolver::active_prefix_ppx(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos, int active_k, const function<double(void)>& rnd) {
+    int n = p1.videos.size();
+    VideoOrder child;
+    child.videos.reserve(n);
+    if (n == 0) return child;
+
+    int window = min(n, max(2, active_k));
+    vector<char> used(nbr_videos, 0);
+
+    int i1 = 0, i2 = 0;
+    for (int slot = 0; slot < window; ++slot) {
+        bool from_p1 = rnd() < 0.5;
+        const vector<int>& src = from_p1 ? p1.videos : p2.videos;
+        int& idx = from_p1 ? i1 : i2;
+
+        while (used[src[idx]]) ++idx;
+        used[src[idx]] = 1;
+        child.videos.push_back(src[idx]);
+    }
+
+    // Inactive tail: remaining videos in p2's order
+    for (int v : p2.videos) {
+        if (!used[v]) child.videos.push_back(v);
+    }
+    return child;
+}
+
+// Treats the active prefix as a set: videos active in both parents are always kept,
+// the remaining slots are drawn from the videos active in only one parent.
+VideoOrder SequenceSolver::active_set_crossover(const VideoOrder& p1, const VideoOrder& p2, int nbr_videos, int active_k, const function<double(void)>& rnd) {
+    int n = p1.videos.size();
+    VideoOrder child;
+    child.videos.reserve(n);
+    if (n == 0) return child;
+
+    int window = min(n, max(2, active_k));
+
+    vector<char> in_p1(nbr_videos, 0), in_p2(nbr_videos, 0);
+    for (int i = 0; i < window; ++i) {
+        in_p1[p1.videos[i]] = 1;
+        in_p2[p2.videos[i]] = 1;
+    }
+
+    // (position in the source parent, video)
+    vector<pair<int, int>> prefix;
+    vector<pair<int, int>> pool;
+    prefix.reserve(window);
+    for (int i = 0; i < window; ++i) {
+        if (in_p2[p1.videos[i]]) prefix.push_back({i, p1.videos[i]});
+        else pool.push_back({i, p1.videos[i]});
+
+        if (!in_p1[p2.videos[i]]) pool.push_back({i, p2.videos[i]});
+    }
+
+    // Partial Fisher-Yates over the videos the parents disagree on
+    int need = window - static_cast<int>(prefix.size());
+    int pool_size = pool.size();
+    for (int i = 0; i < need; ++i) {
+        int remaining = pool_size - i;
+        int j = i + static_cast<int>(rnd() * remaining) % remaining;
+        swap(pool[i], pool[j]);
+        prefix.push_back(pool[i]);
+    }
+
+    // Each video keeps the rank it had in its source parent
+    sort(prefix.begin(), prefix.end());
+
+    vector<char> used(nbr_videos, 0);
+    for (const auto& [pos, v] : prefix) {
+        child.videos.push_back(v);
+        used[v] = 1;
+    }
+
+    // Inactive tail: remaining videos in p2's order
+    for (int v : p2.videos) {
+        if (!used[v]) child.videos.push_back(v);
     }
     return child;
 }
@@ -640,10 +727,16 @@ VideoOrder SequenceSolver::execute_crossover(
             return position_based_crossover(p1, p2,nbr_videos, rnd);
 
         case CrossoverStrategy::PARTIALLY_MAPPED_PMX:
-            return partially_mapped_crossover(p1, p2, active_k, rnd);
+            return partially_mapped_crossover(p1, p2, nbr_videos, active_k, rnd);
 
         case CrossoverStrategy::CYCLE_CROSSOVER_CX:
-            return cycle_crossover(p1, p2);
+            return cycle_crossover(p1, p2, nbr_videos);
+
+        case CrossoverStrategy::ACTIVE_PREFIX_PPX:
+            return active_prefix_ppx(p1, p2, nbr_videos, active_k, rnd);
+
+        case CrossoverStrategy::ACTIVE_SET_CROSSOVER:
+            return active_set_crossover(p1, p2, nbr_videos, active_k, rnd);
 
         case CrossoverStrategy::BASELINE_OX1:
         default:
@@ -729,13 +822,44 @@ VideoOrder SequenceSolver::boundary_swap(const VideoOrder& original, int active_
     return mutated;
 }
 
+// Moves a video the decoder could not place in front of a video it did place.
+// Uses the real placed/unplaced split instead of the active_k estimate.
+VideoOrder SequenceSolver::promote_unplaced(const VideoOrder& original, const vector<char>& placed, const function<double(void)>& rnd) {
+    VideoOrder mutated = original;
+    int n = mutated.videos.size();
+    if (n < 2) return mutated;
+
+    vector<int> placed_pos, unplaced_pos;
+    for (int i = 0; i < n; ++i) {
+        if (placed[mutated.videos[i]]) placed_pos.push_back(i);
+        else unplaced_pos.push_back(i);
+    }
+    if (placed_pos.empty() || unplaced_pos.empty()) return swap_mutation(original, rnd);
+
+    // Only the first unplaced videos are candidates, as many as there are placed ones
+    int band = min(unplaced_pos.size(), placed_pos.size());
+    int from = unplaced_pos[static_cast<int>(rnd() * band) % band];
+
+    // Target: the position of a random placed video located before it
+    int before = lower_bound(placed_pos.begin(), placed_pos.end(), from) - placed_pos.begin();
+    int to = before > 0 ? placed_pos[static_cast<int>(rnd() * before) % before] : 0;
+
+    rotate(mutated.videos.begin() + to, mutated.videos.begin() + from, mutated.videos.begin() + from + 1);
+    return mutated;
+}
+
 VideoOrder SequenceSolver::execute_mutation(
     MutationStrategy strategy,
     const VideoOrder& original,
     int active_k,
-    const function<double(void)>& rnd
+    const function<double(void)>& rnd,
+    const vector<char>* placed
 ) {
     switch (strategy) {
+        case MutationStrategy::PROMOTE_UNPLACED:
+            if (!placed) return boundary_swap(original, active_k, rnd);
+            return promote_unplaced(original, *placed, rnd);
+
         case MutationStrategy::ACTIVE_PREFIX_SWAP:
             return active_prefix_swap(original, active_k, rnd);
 

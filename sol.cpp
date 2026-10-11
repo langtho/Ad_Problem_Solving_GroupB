@@ -46,6 +46,8 @@ int main(int argc, char* argv[])
     if (argc >= 6 && argv[5] != nullptr) mut_strat  = static_cast<MutationStrategy>(stoi(argv[5]));
     if (argc >= 7 && argv[6] != nullptr) ls_strat   = static_cast<LocalSearchStrategy>(stoi(argv[6]));
     if (argc >= 8 && argv[7] != nullptr) dec_strat  = static_cast<DecodingStrategy>(stoi(argv[7]));
+    unsigned int seed = 42;
+    if (argc >= 9 && argv[8] != nullptr) seed       = static_cast<unsigned int>(stoul(argv[8]));
 
 
     ProblemData problemData = read_problem_data();
@@ -64,7 +66,8 @@ int main(int argc, char* argv[])
         cx_strat,
         mut_strat,
         ls_strat,
-        dec_strat
+        dec_strat,
+        seed
     );
 
 

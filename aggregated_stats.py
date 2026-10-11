@@ -24,14 +24,17 @@ STRATEGY_NAMES = {
         1: "ACTIVE_PREFIX_OX1",
         2: "POSITION_BASED_POS",
         3: "PARTIALLY_MAPPED_PMX",
-        4: "CYCLE_CROSSOVER_CX"
+        4: "CYCLE_CROSSOVER_CX",
+        5: "ACTIVE_PREFIX_PPX",
+        6: "ACTIVE_SET_CROSSOVER"
     },
     "mut": {
         0: "BASELINE_SWAP",
         1: "ACTIVE_PREFIX_SWAP",
         2: "ACTIVE_PREFIX_INVERSION",
         3: "ACTIVE_PREFIX_INSERTION",
-        4: "BOUNDARY_SWAP"
+        4: "BOUNDARY_SWAP",
+        5: "PROMOTE_UNPLACED"
     },
     "ls": {
         0: "NONE",

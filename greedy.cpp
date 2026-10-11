@@ -88,6 +88,7 @@ long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution
         best_latency[r] = problem.endpoints[request_endpoint[r]];
     }
     fill(used_capacity.begin(), used_capacity.end(), 0);
+    placed.assign(problem.nbr_videos, 0);
 
     if (solution) {
         solution->sequence = order;
@@ -137,6 +138,7 @@ long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution
             if (best_cache < 0) continue;
 
             used_capacity[best_cache] += size;
+            placed[v] = 1;
             if (solution) {
                 solution->results[best_cache][v] = true;
                 solution->used_capacity[best_cache] += size;

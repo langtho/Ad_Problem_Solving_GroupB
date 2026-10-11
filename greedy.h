@@ -37,6 +37,9 @@ public:
     // Block 5 Extended Decode Engine
     long long decode(const std::vector<int>& order, Solution* solution, const DecodeParams& params);
 
+    // placed[v] = 1 if video v got at least one cache in the last static greedy decode
+    const std::vector<char>& last_placed() const { return placed; }
+
 private:
     const ProblemData& problem;
     long long total_requests = 0;
@@ -57,6 +60,7 @@ private:
     std::vector<int> used_capacity;     // MB used in each cache
     std::vector<long long> cache_gain;  // time saved by adding the current video to each cache
     std::vector<int> touched_caches;
+    std::vector<char> placed;
 
     long long decode_static_greedy(const std::vector<int>& order, Solution* solution, const DecodeParams& params);
     long long decode_soft_slack_repaired(const std::vector<int>& order, Solution* solution);
