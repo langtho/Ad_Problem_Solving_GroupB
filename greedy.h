@@ -19,6 +19,15 @@ struct DecodeParams {
     double tau_density = 0.0;  // Min gain/MB gate threshold
     double tau_reserve = 0.0;  // Reserved capacity fraction for top items
 };
+
+struct DecodeState {
+    std::vector<int> best_latency;
+    std::vector<int> used_capacity;
+    std::vector<char> placed;
+    long long total_saved = 0;
+    int start_idx = 0;
+};
+
 class GreedyDecoder {
 public:
     explicit GreedyDecoder(const ProblemData& problem);
@@ -33,10 +42,7 @@ public:
     std::vector<int> priority_order() const;
 
     long long decode(const std::vector<int>& order, Solution* solution = nullptr);
-
-    // Block 5 Extended Decode Engine
-    long long decode(const std::vector<int>& order, Solution* solution, const DecodeParams& params);
-
+    long long decode(const std::vector<int>& order, Solution* solution, const DecodeParams& params, const DecodeState* start_state = nullptr, std::vector<DecodeState>* out_states = nullptr);
     // placed[v] = 1 if video v got at least one cache in the last static greedy decode
     const std::vector<char>& last_placed() const { return placed; }
 
@@ -62,7 +68,7 @@ private:
     std::vector<int> touched_caches;
     std::vector<char> placed;
 
-    long long decode_static_greedy(const std::vector<int>& order, Solution* solution, const DecodeParams& params);
+    long long decode_static_greedy(const std::vector<int>& order, Solution* solution, const DecodeParams& params, const DecodeState* start_state, std::vector<DecodeState>* out_states);
     long long decode_soft_slack_repaired(const std::vector<int>& order, Solution* solution);
     long long decode_demand_cache_centric(const std::vector<int>& order, Solution* solution);
 };

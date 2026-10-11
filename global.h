@@ -83,7 +83,12 @@ inline void generate_json_output(
     double ls_avg_delta = 0.0,
     int decoding_strategy_id = 0,
     double avg_eval_us = 0.0,
-    double cache_utilization = 0.0
+    double cache_utilization = 0.0,
+    double cx_deleterious_avg = 0.0,
+    double mut_deleterious_avg = 0.0,
+    double ls_cap_hit_rate = 0.0,
+    double residual_slack_mb = 0.0,
+    int phenotypic_diversity_d0 = 0
 ) {
     std::error_code ec;
     std::filesystem::create_directories(output_dir, ec);
@@ -91,9 +96,7 @@ inline void generate_json_output(
     std::string filename = output_dir + "/fitness_plot_" + instance_name + ".json";
 
     std::ofstream out(filename);
-    if (!out) {
-        return;
-    }
+    if (!out) return;
 
     out << "{\n";
     out << "  \"instance\": \"" << instance_name << "\",\n";
@@ -106,14 +109,19 @@ inline void generate_json_output(
     out << "  \"gen_0_best_score\": " << gen_0_best << ",\n";
     out << "  \"gen_0_mean_score\": " << gen_0_mean << ",\n";
     out << "  \"gen_0_diversity_d0\": " << d0 << ",\n";
+    out << "  \"phenotypic_diversity_d0\": " << phenotypic_diversity_d0 << ",\n";
     out << "  \"crossover_success_rate\": " << cx_success_rate << ",\n";
     out << "  \"crossover_neutral_rate\": " << cx_neutral_rate << ",\n";
+    out << "  \"cx_deleterious_avg_drop\": " << cx_deleterious_avg << ",\n";
     out << "  \"mutation_success_rate\": " << mut_success_rate << ",\n";
     out << "  \"mutation_neutral_rate\": " << mut_neutral_rate << ",\n";
+    out << "  \"mut_deleterious_avg_drop\": " << mut_deleterious_avg << ",\n";
     out << "  \"local_search_success_rate\": " << ls_success_rate << ",\n";
     out << "  \"local_search_avg_delta\": " << ls_avg_delta << ",\n";
+    out << "  \"ls_cap_hit_rate\": " << ls_cap_hit_rate << ",\n";
     out << "  \"avg_eval_microseconds\": " << avg_eval_us << ",\n";
     out << "  \"cache_utilization_ratio\": " << cache_utilization << ",\n";
+    out << "  \"residual_slack_mb\": " << residual_slack_mb << ",\n";
     out << "  \"total_evaluations\": " << total_evals << ",\n";
     out << "  \"total_generations\": " << total_gens << ",\n";
     out << "  \"population_size\": " << pop_size << ",\n";
@@ -126,15 +134,10 @@ inline void generate_json_output(
         out << "      \"eval\": " << data[i].first << ",\n";
         out << "      \"fitness\": " << data[i].second << "\n";
         out << "    }";
-
-        if (i < data.size() - 1) {
-            out << ",\n";
-        } else {
-            out << "\n";
-        }
+        if (i < data.size() - 1) out << ",\n";
+        else out << "\n";
     }
-    out << "  ]\n";
-    out << "}\n";
+    out << "  ]\n}\n";
     out.close();
 }
 

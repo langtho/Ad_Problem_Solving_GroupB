@@ -64,10 +64,10 @@ vector<int> GreedyDecoder::priority_order() const {
 
 long long GreedyDecoder::decode(const vector<int>& order, Solution* solution) {
     DecodeParams default_params;
-    return decode(order, solution, default_params);
+    return decode(order, solution, default_params, nullptr, nullptr);
 }
 
-long long GreedyDecoder::decode(const vector<int>& order, Solution* solution, const DecodeParams& params) {
+long long GreedyDecoder::decode(const vector<int>& order, Solution* solution, const DecodeParams& params, const DecodeState* start_state, std::vector<DecodeState>* out_states) {
     switch (params.strategy) {
         case DecodingStrategy::SOFT_SLACK_REPAIRED:
             return decode_soft_slack_repaired(order, solution);
@@ -79,40 +79,60 @@ long long GreedyDecoder::decode(const vector<int>& order, Solution* solution, co
         case DecodingStrategy::CO_EVOLVED_THRESHOLDS:
         case DecodingStrategy::STATIC_GREEDY:
         default:
-            return decode_static_greedy(order, solution, params);
+            return decode_static_greedy(order, solution, params, start_state, out_states);
     }
 }
 
-long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution* solution, const DecodeParams& params) {
-    for (size_t r = 0; r < best_latency.size(); ++r) {
-        best_latency[r] = problem.endpoints[request_endpoint[r]];
-    }
-    fill(used_capacity.begin(), used_capacity.end(), 0);
-    placed.assign(problem.nbr_videos, 0);
-
-    if (solution) {
-        solution->sequence = order;
-        solution->results.assign(problem.nbr_caches, vector<bool>(problem.nbr_videos, false));
-        solution->used_capacity.assign(problem.nbr_caches, 0);
-    }
-
+long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution* solution, const DecodeParams& params, const DecodeState* start_state, vector<DecodeState>* out_states) {
     long long total_saved = 0;
-    vector<int> active = order;
-    vector<int> next_active;
+    int start_i = 0;
 
-    int total_active_vids = active.size();
+    // 1. Restore from Checkpoint or Initialize Fresh
+    if (start_state) {
+        best_latency = start_state->best_latency;
+        used_capacity = start_state->used_capacity;
+        placed = start_state->placed;
+        total_saved = start_state->total_saved;
+        start_i = start_state->start_idx;
+    } else {
+        for (size_t r = 0; r < best_latency.size(); ++r) best_latency[r] = problem.endpoints[request_endpoint[r]];
+        fill(used_capacity.begin(), used_capacity.end(), 0);
+        placed.assign(problem.nbr_videos, 0);
+
+        if (solution) {
+            solution->sequence = order;
+            solution->results.assign(problem.nbr_caches, vector<bool>(problem.nbr_videos, false));
+            solution->used_capacity.assign(problem.nbr_caches, 0);
+        }
+    }
+
+    int total_active_vids = order.size();
     int top_reserve_idx = static_cast<int>(total_active_vids * (1.0 - params.tau_reserve));
 
-    int vid_rank = 0;
-    while (!active.empty()) {
-        next_active.clear();
-        for (int v : active) {
-            int size = problem.videos[v];
+    // 2. Strict Chronological Evaluation
+    for (size_t i = start_i; i < order.size(); ++i) {
+        // Output state BEFORE processing index i
+        if (out_states && i == out_states->size()) {
+            DecodeState state;
+            state.best_latency = best_latency;
+            state.used_capacity = used_capacity;
+            state.placed = placed;
+            state.total_saved = total_saved;
+            state.start_idx = i;
+            out_states->push_back(std::move(state));
+        }
+
+        int v = order[i];
+        int size = problem.videos[v];
+        if (size == 0 || size > problem.cap_cache) continue;
+
+        while (true) {
+            int best_cache = -1;
+            long long best_gain = 0;
 
             for (int r = request_start[v]; r < request_start[v + 1]; ++r) {
                 for (auto [c, latency] : connections[request_endpoint[r]]) {
-                    // Check reserve capacity constraint if threshold gate active
-                    int eff_cap = (params.tau_reserve > 0.0 && vid_rank > top_reserve_idx) ?
+                    int eff_cap = (params.tau_reserve > 0.0 && static_cast<int>(i) > top_reserve_idx) ?
                                   static_cast<int>(problem.cap_cache * (1.0 - params.tau_reserve)) : problem.cap_cache;
 
                     if (latency < best_latency[r] && used_capacity[c] + size <= eff_cap) {
@@ -122,12 +142,8 @@ long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution
                 }
             }
 
-            int best_cache = -1;
-            long long best_gain = 0;
             for (int c : touched_caches) {
-                double gain_per_mb = size > 0 ? static_cast<double>(cache_gain[c]) / size : 0.0;
-
-                // Density gate filter
+                double gain_per_mb = static_cast<double>(cache_gain[c]) / size;
                 if (cache_gain[c] > best_gain && gain_per_mb >= params.tau_density) {
                     best_gain = cache_gain[c];
                     best_cache = c;
@@ -135,7 +151,7 @@ long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution
                 cache_gain[c] = 0;
             }
             touched_caches.clear();
-            if (best_cache < 0) continue;
+            if (best_cache < 0) break; // Video has saturated all profitable caches
 
             used_capacity[best_cache] += size;
             placed[v] = 1;
@@ -143,6 +159,7 @@ long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution
                 solution->results[best_cache][v] = true;
                 solution->used_capacity[best_cache] += size;
             }
+
             for (int r = request_start[v]; r < request_start[v + 1]; ++r) {
                 int latency = problem.network[request_endpoint[r]][best_cache];
                 if (latency > 0 && latency < best_latency[r]) {
@@ -150,12 +167,8 @@ long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution
                     best_latency[r] = latency;
                 }
             }
-            next_active.push_back(v);
-            vid_rank++;
         }
-        swap(active, next_active);
     }
-
     return total_requests ? (total_saved * 1000) / total_requests : 0;
 }
 

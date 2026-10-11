@@ -48,7 +48,8 @@ int main(int argc, char* argv[])
     if (argc >= 8 && argv[7] != nullptr) dec_strat  = static_cast<DecodingStrategy>(stoi(argv[7]));
     unsigned int seed = 42;
     if (argc >= 9 && argv[8] != nullptr) seed       = static_cast<unsigned int>(stoul(argv[8]));
-
+    double max_time_seconds = 230.0;
+    if (argc >= 10 && argv[9] != nullptr) max_time_seconds = stod(argv[9]);
 
     ProblemData problemData = read_problem_data();
 
@@ -57,7 +58,8 @@ int main(int argc, char* argv[])
                                     + "_cx"   + to_string(static_cast<int>(cx_strat))
                                     + "_mut"  + to_string(static_cast<int>(mut_strat))
                                     + "_ls"   + to_string(static_cast<int>(ls_strat))
-                                    + "_dec"  + to_string(static_cast<int>(dec_strat));
+                                    + "_dec"  + to_string(static_cast<int>(dec_strat))
+                                    + "_seed" + to_string(seed);
     Solution sol = solver.run_benchmark(
         problemData,
         best_known_value,
@@ -67,7 +69,8 @@ int main(int argc, char* argv[])
         mut_strat,
         ls_strat,
         dec_strat,
-        seed
+        seed,
+        max_time_seconds
     );
 
 
