@@ -1,6 +1,6 @@
 # Crossovers et mutations du `SequenceSolver`
 
-Ce document décrit le fonctionnement de chaque mutation (et, plus brièvement, de chaque crossover) de [sequenceSolver.cpp](sequenceSolver.cpp), puis compare les six mutations sur la moitié des instances de `instances/promo`.
+Ce document décrit le fonctionnement de chaque mutation (et, plus brièvement, de chaque crossover) de [sequenceSolver.cpp](sequenceSolver.cpp), puis compare les six mutations (section 4) et les sept crossovers (section 5) sur la moitié des instances de `instances/promo`.
 
 ## 1. Contexte : ce qu'un opérateur modifie réellement
 
@@ -249,3 +249,109 @@ Pour relancer un run : `solver <best_known> <nom> <init> <cx> <mut> <ls> <dec> [
 - Les gains sont mesurés par rapport à la génération 0, pas par rapport à la meilleure valeur connue.
 - Une seule configuration des autres blocs est testée : le classement peut changer avec un autre crossover ou avec la recherche locale activée.
 - `PROMOTE_UNPLACED` lit les vidéos placées par le décodeur glouton standard. Avec un autre décodeur (IDs 1 à 4), cette information ne correspond pas exactement à la solution évaluée ; ce cas n'a pas été testé.
+
+## 5. Comparaison des crossovers
+
+### Protocole
+
+Le protocole est celui de la section 4, en faisant varier le crossover au lieu de la mutation.
+
+- **Instances** : les mêmes 14 instances de `instances/promo`.
+- **Configuration fixe** : init 2 (`NOISY_PRIORITY_ADD`), mutation 2 (`ACTIVE_PREFIX_INVERSION`, celle de la configuration par défaut de `benchmark.py`), pas de recherche locale, décodeur 0 (`STATIC_GREEDY`).
+- **Paramètres du GA** : ceux du code, inchangés.
+- **Graines** : 5 par couple instance × crossover (graines 1 à 5), soit 490 runs. Les 70 runs du crossover 1 sont ceux de la colonne `PREFIX_INVERSION` de la section 4.
+- **Mesure** : gain du meilleur score final par rapport au meilleur individu de la génération 0, en %, moyenné sur les 5 graines.
+
+Les noms sont abrégés dans les tableaux par instance : `OX1` = `BASELINE_OX1`, `PREFIX_OX1` = `ACTIVE_PREFIX_OX1`, `POS` = `POSITION_BASED_POS`, `PMX` = `PARTIALLY_MAPPED_PMX`, `CX` = `CYCLE_CROSSOVER_CX`, `PREFIX_PPX` = `ACTIVE_PREFIX_PPX`, `ACTIVE_SET` = `ACTIVE_SET_CROSSOVER`.
+
+### Synthèse sur les 14 instances
+
+| Crossover | Gain moyen (%) | Rang moyen | Victoires | Crossovers améliorants (%) | Crossovers neutres (%) | Évaluations par run | Runs qui battent la gén. 0 (%) |
+|---|---|---|---|---|---|---|---|
+| 0 `BASELINE_OX1` | 1,022 | 2,71 | **4,0** | 5,9 | 45,6 | 652 | 76 |
+| 1 `ACTIVE_PREFIX_OX1` | **1,320** | **2,43** | **4,0** | 8,8 | 44,4 | 606 | **79** |
+| 2 `POSITION_BASED_POS` | 0,889 | 4,14 | 2,0 | 7,3 | 19,8 | 549 | 47 |
+| 3 `PARTIALLY_MAPPED_PMX` | 1,162 | 3,00 | 2,0 | 3,8 | 45,3 | 649 | 74 |
+| 4 `CYCLE_CROSSOVER_CX` | 1,146 | 4,07 | 2,0 | 1,4 | 89,2 | 514 | 64 |
+| 5 `ACTIVE_PREFIX_PPX` | 0,500 | 5,93 | 0,0 | **19,7** | 22,6 | 384 | 51 |
+| 6 `ACTIVE_SET_CROSSOVER` | 0,845 | 4,21 | 0,0 | 12,1 | 24,1 | 499 | 59 |
+
+- *Rang moyen* : rang du crossover sur chaque instance (1 = meilleur gain), moyenné. Un classement au hasard donnerait 4.
+- *Victoires* : nombre d'instances où le crossover a le meilleur gain.
+- *Améliorants* : part des enfants strictement meilleurs que le meilleur de leurs deux parents.
+- *Neutres* : part des enfants dont le score est égal à celui d'un des deux parents.
+- *Évaluations par run* : un run s'arrête après 10 générations sans progrès, donc un nombre faible signifie que le GA a calé tôt.
+
+### Gain par instance (% au-dessus du meilleur de la génération 0)
+
+| Instance | Meilleur gén. 0 | 0 `OX1` | 1 `PREFIX_OX1` | 2 `POS` | 3 `PMX` | 4 `CX` | 5 `PREFIX_PPX` | 6 `ACTIVE_SET` |
+|---|---|---|---|---|---|---|---|---|
+| `3860_246_84901_66` | 1 972 980 | **0,001** | 0,000 | 0,000 | 0,000 | 0,000 | 0,000 | 0,000 |
+| `6970_311_100000_69` | 1 725 950 | 0,005 | 0,005 | 0,000 | 0,004 | **0,013** | 0,000 | 0,000 |
+| `big` | 249 794 | **1,206** | 1,133 | 0,618 | 1,094 | 1,151 | 0,555 | 1,081 |
+| `custom_universallambda42` | 946 459 | 0,002 | 0,002 | 0,000 | **0,007** | 0,000 | 0,002 | 0,003 |
+| `dense` | 52 949 | 6,548 | 10,859 | 6,121 | 9,191 | **11,165** | 3,940 | 5,896 |
+| `instance1` | 1 429 440 | 0,000 | **0,005** | 0,000 | 0,001 | 0,000 | 0,000 | 0,000 |
+| `INSTANCED` | 1 163 020 | 0,428 | **0,467** | 0,399 | 0,442 | 0,327 | 0,232 | 0,386 |
+| `medium_flat_sparse_lambda` | 16 656 | 0,988 | **1,750** | 0,999 | 1,216 | 0,537 | 0,000 | 0,279 |
+| `medium_mixed_lambda` | 44 903 | 0,172 | 0,042 | 0,000 | **0,186** | 0,060 | 0,000 | 0,000 |
+| `medium_skew_dense_dejavu` | 156 528 | **0,069** | 0,017 | 0,000 | 0,002 | 0,002 | 0,000 | 0,000 |
+| `realistic_large_clustered` | 684 882 | 0,465 | **0,861** | 0,137 | 0,617 | 0,825 | 0,034 | 0,476 |
+| `regional_instance` | 2 240 470 | 1,503 | 0,794 | **1,547** | 1,047 | 0,165 | 0,514 | 1,222 |
+| `supra` | 369 631 | **2,165** | 1,857 | 1,775 | 1,693 | 1,714 | 1,131 | 1,706 |
+| `zipF_instance` | 1 761 520 | 0,754 | 0,685 | **0,848** | 0,759 | 0,091 | 0,586 | 0,774 |
+
+### Meilleur score final (moyenne des 5 graines)
+
+| Instance | 0 `OX1` | 1 `PREFIX_OX1` | 2 `POS` | 3 `PMX` | 4 `CX` | 5 `PREFIX_PPX` | 6 `ACTIVE_SET` |
+|---|---|---|---|---|---|---|---|
+| `3860_246_84901_66` | 1 972 990 | 1 972 984 | 1 972 982 | 1 972 982 | 1 972 980 | 1 972 980 | 1 972 984 |
+| `6970_311_100000_69` | 1 726 042 | 1 726 042 | 1 725 950 | 1 726 026 | 1 726 174 | 1 725 950 | 1 725 950 |
+| `big` | 252 806 | 252 624 | 251 338 | 252 528 | 252 669 | 251 180 | 252 495 |
+| `custom_universallambda42` | 946 474 | 946 480 | 946 459 | 946 527 | 946 459 | 946 478 | 946 485 |
+| `dense` | 56 416 | 58 697 | 56 190 | 57 814 | 58 859 | 55 035 | 56 072 |
+| `instance1` | 1 429 446 | 1 429 518 | 1 429 440 | 1 429 454 | 1 429 440 | 1 429 440 | 1 429 440 |
+| `INSTANCED` | 1 168 002 | 1 168 446 | 1 167 666 | 1 168 166 | 1 166 824 | 1 165 720 | 1 167 512 |
+| `medium_flat_sparse_lambda` | 16 821 | 16 947 | 16 822 | 16 859 | 16 745 | 16 656 | 16 702 |
+| `medium_mixed_lambda` | 44 980 | 44 922 | 44 903 | 44 986 | 44 930 | 44 903 | 44 903 |
+| `medium_skew_dense_dejavu` | 156 637 | 156 554 | 156 528 | 156 532 | 156 532 | 156 528 | 156 528 |
+| `realistic_large_clustered` | 688 069 | 690 780 | 685 823 | 689 109 | 690 535 | 685 116 | 688 144 |
+| `regional_instance` | 2 274 146 | 2 258 256 | 2 275 136 | 2 263 934 | 2 244 160 | 2 251 984 | 2 267 842 |
+| `supra` | 377 635 | 376 495 | 376 194 | 375 889 | 375 967 | 373 811 | 375 937 |
+| `zipF_instance` | 1 774 806 | 1 773 578 | 1 776 458 | 1 774 890 | 1 763 122 | 1 771 840 | 1 775 156 |
+
+### Crossovers améliorants / neutres par instance (en %)
+
+| Instance | 0 `OX1` | 1 `PREFIX_OX1` | 2 `POS` | 3 `PMX` | 4 `CX` | 5 `PREFIX_PPX` | 6 `ACTIVE_SET` |
+|---|---|---|---|---|---|---|---|
+| `3860_246_84901_66` | 4 / 44 | 8 / 35 | 8 / 20 | 3 / 32 | 0 / 100 | 24 / 13 | 10 / 20 |
+| `6970_311_100000_69` | 6 / 21 | 13 / 24 | 8 / 11 | 3 / 32 | 0 / 100 | 24 / 14 | 14 / 14 |
+| `big` | 5 / 61 | 6 / 51 | 7 / 29 | 6 / 55 | 0 / 99 | 10 / 21 | 7 / 52 |
+| `custom_universallambda42` | 6 / 42 | 14 / 41 | 9 / 13 | 7 / 50 | 9 / 33 | 18 / 39 | 14 / 35 |
+| `dense` | 9 / 52 | 6 / 52 | 9 / 18 | 5 / 51 | 0 / 100 | 25 / 21 | 9 / 20 |
+| `instance1` | 4 / 28 | 13 / 40 | 6 / 15 | 2 / 34 | 0 / 100 | 19 / 14 | 21 / 15 |
+| `INSTANCED` | 4 / 53 | 8 / 39 | 5 / 26 | 4 / 38 | 5 / 62 | 9 / 18 | 12 / 23 |
+| `medium_flat_sparse_lambda` | 7 / 52 | 3 / 68 | 5 / 23 | 2 / 51 | 5 / 67 | 34 / 14 | 8 / 20 |
+| `medium_mixed_lambda` | 7 / 50 | 6 / 32 | 8 / 14 | 2 / 46 | 0 / 100 | 34 / 10 | 7 / 11 |
+| `medium_skew_dense_dejavu` | 7 / 44 | 19 / 33 | 9 / 12 | 1 / 40 | 0 / 100 | 31 / 14 | 30 / 10 |
+| `realistic_large_clustered` | 4 / 30 | 8 / 45 | 6 / 14 | 2 / 48 | 0 / 100 | 24 / 17 | 14 / 17 |
+| `regional_instance` | 6 / 48 | 7 / 55 | 8 / 28 | 5 / 50 | 0 / 100 | 6 / 39 | 9 / 31 |
+| `supra` | 6 / 56 | 7 / 50 | 9 / 29 | 6 / 53 | 1 / 87 | 9 / 38 | 8 / 40 |
+| `zipF_instance` | 6 / 56 | 5 / 58 | 8 / 28 | 6 / 53 | 0 / 100 | 8 / 43 | 7 / 30 |
+
+### Lecture des résultats
+
+- **Contrairement aux mutations, les crossovers se départagent.** Les rangs moyens vont de 2,43 à 5,93 pour une valeur au hasard de 4.
+- **`ACTIVE_PREFIX_OX1` est le meilleur choix** : meilleur rang moyen, meilleur gain moyen, et c'est avec lui que le plus de runs dépassent la génération 0 (79 %). `BASELINE_OX1` et `PARTIALLY_MAPPED_PMX` le suivent de près ; l'écart entre ces trois-là n'est pas assez grand pour être sûr de l'ordre.
+- **`ACTIVE_PREFIX_PPX` est le plus mauvais** : rang moyen 5,93 sur 7, aucune victoire, strictement dernier sur six instances, et sur `medium_flat_sparse_lambda` il n'améliore jamais la génération 0. Ses runs s'arrêtent aussi le plus tôt (384 évaluations en moyenne contre 600 à 650 pour les trois meilleurs).
+- **`ACTIVE_SET_CROSSOVER` est dans la moitié basse**, sans aucune victoire. Les deux crossovers ajoutés ne sont donc pas à retenir tels quels.
+- **Le taux de crossovers améliorants ne prédit pas le score final.** `ACTIVE_PREFIX_PPX` a le taux le plus élevé (19,7 %) et le plus mauvais résultat ; `ACTIVE_SET_CROSSOVER` est deuxième sur ce taux et avant-dernier au rang. Ce taux compare l'enfant à ses deux parents, pas au meilleur individu de la population. Hypothèse non vérifiée : ces deux crossovers ramènent des parents bruités vers un ordre « consensus » meilleur qu'eux, mais sans jamais dépasser l'élite, et ils uniformisent la population, ce qui déclenche l'arrêt plus tôt.
+- **`CYCLE_CROSSOVER_CX` ne recombine presque rien** : 89 % de ses enfants ont le score d'un parent, et 100 % sur neuf instances. Avec lui, le GA se réduit à peu près à la sélection et à la mutation. Il obtient pourtant le meilleur gain sur `dense` (+11,2 %), au niveau de `ACTIVE_PREFIX_OX1` (+10,9 %). Sur cette instance, le progrès vient donc de la mutation et non du crossover, ce qui recoupe la section 4, où `dense` est l'instance qui sépare le plus les mutations. En contrepartie, il est dernier sur `regional_instance` et `zipF_instance`.
+- **`POSITION_BASED_POS` est le plus perturbateur des crossovers existants** (20 % de neutres seulement) et moins d'un run sur deux dépasse la génération 0. Il gagne quand même sur les deux petites instances `regional_instance` et `zipF_instance`.
+- **Les quatre mêmes instances ne départagent rien** (`3860_246_84901_66`, `6970_311_100000_69`, `custom_universallambda42`, `instance1` : gain inférieur à 0,02 % pour tous les crossovers).
+
+### Limites
+
+- Mêmes réserves que pour la section 4 : cinq graines par cellule, pas de test statistique, gains mesurés par rapport à la génération 0.
+- La mutation est fixée à `ACTIVE_PREFIX_INVERSION`. Le classement peut changer avec une autre mutation, en particulier avec `PROMOTE_UNPLACED`, qui n'a pas été croisée avec les crossovers.
+- Le critère d'arrêt pénalise les crossovers qui font converger la population rapidement. Avec un budget d'évaluations fixe au lieu d'un arrêt sur stagnation, l'écart pourrait être différent.
