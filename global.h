@@ -88,7 +88,8 @@ inline void generate_json_output(
     double mut_deleterious_avg = 0.0,
     double ls_cap_hit_rate = 0.0,
     double residual_slack_mb = 0.0,
-    int phenotypic_diversity_d0 = 0
+    int phenotypic_diversity_d0 = 0,int best_found_gen=0, double d_final=0, int phenotypic_diversity_final=0
+
 ) {
     std::error_code ec;
     std::filesystem::create_directories(output_dir, ec);
@@ -128,6 +129,9 @@ inline void generate_json_output(
     out << "  \"best_fitness_achieved\": " << best_achieved << ",\n";
     out << "  \"total_time_seconds\": " << total_seconds << ",\n";
     out << "  \"targets_hit\": [\n";
+    out << "\"best_found_gen\": " << best_found_gen << ",\n";
+    out << "\"d_final\": " << d_final << ",\n";
+    out << "\"phenotypic_diversity_final\": " << phenotypic_diversity_final << "\n";
 
     for (size_t i = 0; i < data.size(); ++i) {
         out << "    {\n";

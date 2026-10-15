@@ -154,16 +154,17 @@ private:
     double compute_cache_utilization(const ProblemData& problem, const Solution& sol);
 
     void export_benchmark_metrics(
-        const std::string& instance_name, const std::vector<std::pair<int, double>>& history,
-        int eval_count, int current_gen, double best_fitness, double elapsed_seconds, int pop_size,
-        InitStrategy init_strat, CrossoverStrategy cx_strat, MutationStrategy mut_strat, LocalSearchStrategy ls_strat, DecodingStrategy dec_strat,
-        int active_k, double gen_0_best, double gen_0_mean, double d0,
-        long long t_cx, long long s_cx, long long n_cx, long long d_cx, double drop_cx,
-        long long t_mut, long long s_mut, long long n_mut, long long d_mut, double drop_mut,
-        long long t_ls, long long s_ls, long long cap_ls, double gain_ls,
-        long long eval_time_us,
-        const std::vector<VideoOrder>& initial_pop, GreedyDecoder& decoder, const ProblemData& problem, const Solution& final_solution
-    );
+    const std::string& instance_name, const std::vector<std::pair<int, double>>& history,
+    int eval_count, int current_gen, double best_fitness, double elapsed_seconds, int pop_size,
+    InitStrategy init_strat, CrossoverStrategy cx_strat, MutationStrategy mut_strat, LocalSearchStrategy ls_strat, DecodingStrategy dec_strat,
+    int active_k, double gen_0_best, double gen_0_mean, double d0,
+    int best_found_gen, double d_final, int phenotypic_diversity_final,
+    long long t_cx, long long s_cx, long long n_cx, long long d_cx, double drop_cx,
+    long long t_mut, long long s_mut, long long n_mut, long long d_mut, double drop_mut,
+    long long t_ls, long long s_ls, long long cap_ls, double gain_ls,
+    long long eval_time_us,
+    const std::vector<VideoOrder>& initial_pop, GreedyDecoder& decoder, const ProblemData& problem, const Solution& final_solution
+);
 };
 
 #endif //CACHEPROBLEM_SEQUENCE_SOLVER_H

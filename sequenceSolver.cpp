@@ -97,6 +97,7 @@ Solution SequenceSolver::run_benchmark(
     double total_mut_deleterious_drop = 0.0;
 
     long long total_ls_cap_hits = 0;
+    int best_found_gen = 0;
 
     ga.init_genes = [this, &decoder, &ind_counter, pop_size, active_k, init_strat, dec_strat, &initial_pop_store,&start_time,&max_run_time_seconds](VideoOrder& s, const function<double(void)>& rnd) {
         auto now = chrono::high_resolution_clock::now();
@@ -152,6 +153,7 @@ Solution SequenceSolver::run_benchmark(
 
         if (score > best_fitness) {
             best_fitness = score;
+            best_found_gen = current_gen;
             global_best_order = s;
         }
 
@@ -299,7 +301,7 @@ Solution SequenceSolver::run_benchmark(
         }
     };
 
-    try {
+try {
         ga.solve();
     } catch (const std::runtime_error& e) {
 
@@ -307,9 +309,33 @@ Solution SequenceSolver::run_benchmark(
 
     chrono::duration<double> elapsed = chrono::high_resolution_clock::now() - start_time;
 
-   // Calculate final sequence states
     double d0 = compute_population_diversity(initial_pop_store, active_k);
     double gen_0_mean = pop_size > 0 ? gen_0_sum / pop_size : 0.0;
+
+    vector<VideoOrder> final_pop_store;
+    set<std::string> final_unique_phenotypes;
+    const auto& chromosomes = ga.last_generation.chromosomes;
+
+    for (const auto& chrom : chromosomes) {
+        final_pop_store.push_back(chrom.genes);
+
+        Solution temp_sol;
+        DecodeParams params;
+        params.strategy = dec_strat;
+        if (dec_strat == DecodingStrategy::FIXED_THRESHOLD_PROFILE) {
+            params.tau_density = 0.15; params.tau_reserve = 0.10;
+        } else if (dec_strat == DecodingStrategy::CO_EVOLVED_THRESHOLDS && chrom.genes.thresholds.size() >= 2) {
+            params.tau_density = chrom.genes.thresholds[0];
+            params.tau_reserve = chrom.genes.thresholds[1];
+        }
+        decoder.decode(chrom.genes.videos, &temp_sol, params);
+
+        std::string hash_str;
+        for (int cap : temp_sol.used_capacity) hash_str += std::to_string(cap) + "-";
+        final_unique_phenotypes.insert(hash_str);
+    }
+    double d_final = compute_population_diversity(final_pop_store, active_k);
+    int phenotypic_diversity_final = final_unique_phenotypes.size();
 
     Solution final_solution;
     final_solution.results.assign(problem.nbr_caches, vector<bool>(problem.nbr_videos, false));
@@ -317,11 +343,10 @@ Solution SequenceSolver::run_benchmark(
 
     VideoOrder best_final_order = global_best_order;
 
-    const auto& chromosomes = ga.last_generation.chromosomes;
     if (!chromosomes.empty() && ga.last_generation.best_chromosome_index >= 0 &&
         ga.last_generation.best_chromosome_index < static_cast<int>(chromosomes.size())) {
         best_final_order = chromosomes[ga.last_generation.best_chromosome_index].genes;
-        }
+    }
 
     if (!best_final_order.videos.empty()) {
         DecodeParams final_params;
@@ -338,10 +363,12 @@ Solution SequenceSolver::run_benchmark(
         decoder.decode(final_solution.sequence, &final_solution, final_params);
     }
 
+
     export_benchmark_metrics(
         instance_name, history, eval_count, current_gen, best_fitness, elapsed.count(), pop_size,
         init_strat, cx_strat, mut_strat, ls_strat, dec_strat,
         active_k, gen_0_best, gen_0_mean, d0,
+        best_found_gen, d_final, phenotypic_diversity_final,
         total_crossovers, successful_crossovers, neutral_crossovers, deleterious_crossovers, total_cx_deleterious_drop,
         total_mutations, successful_mutations, neutral_mutations, deleterious_mutations, total_mut_deleterious_drop,
         total_ls_apps, successful_ls_apps, total_ls_cap_hits, total_ls_fitness_gain,
@@ -1209,6 +1236,7 @@ void SequenceSolver::export_benchmark_metrics(
     int eval_count, int current_gen, double best_fitness, double elapsed_seconds, int pop_size,
     InitStrategy init_strat, CrossoverStrategy cx_strat, MutationStrategy mut_strat, LocalSearchStrategy ls_strat, DecodingStrategy dec_strat,
     int active_k, double gen_0_best, double gen_0_mean, double d0,
+    int best_found_gen, double d_final, int phenotypic_diversity_final,
     long long t_cx, long long s_cx, long long n_cx, long long d_cx, double drop_cx,
     long long t_mut, long long s_mut, long long n_mut, long long d_mut, double drop_mut,
     long long t_ls, long long s_ls, long long cap_ls, double gain_ls,
@@ -1264,15 +1292,17 @@ void SequenceSolver::export_benchmark_metrics(
     residual_slack_mb = saturated_caches > 0 ? residual_slack_mb / saturated_caches : 0.0;
 
     // 4. Output
-    generate_json_output(
-        instance_name, history, eval_count, current_gen, best_fitness, elapsed_seconds, pop_size,
-        "benchmark_results", static_cast<int>(init_strat), active_k, gen_0_best, gen_0_mean, d0,
-        static_cast<int>(cx_strat), cx_success_rate, cx_neutral_rate,
-        static_cast<int>(mut_strat), mut_success_rate, mut_neutral_rate,
-        static_cast<int>(ls_strat), ls_success_rate, ls_avg_delta,
-        static_cast<int>(dec_strat), avg_eval_us, cache_utilization,
-        cx_del_avg, mut_del_avg, ls_cap_rate, residual_slack_mb, phenotypic_diversity_d0
-    );
+    void generate_json_output(
+    const std::string& instance_name, const std::vector<std::pair<int, double>>& history,
+    int eval_count, int current_gen, double best_fitness, double elapsed_seconds, int pop_size,
+    const std::string& output_dir, int init_strat, int active_k, double gen_0_best, double gen_0_mean, double d0,
+    int cx_strat, double cx_success_rate, double cx_neutral_rate,
+    int mut_strat, double mut_success_rate, double mut_neutral_rate,
+    int ls_strat, double ls_success_rate, double ls_avg_delta,
+    int dec_strat, double avg_eval_us, double cache_utilization,
+    double cx_del_avg, double mut_del_avg, double ls_cap_rate, double residual_slack_mb, int phenotypic_diversity_d0,
+    int best_found_gen, double d_final, int phenotypic_diversity_final
+);
 }
 //endregion
 
