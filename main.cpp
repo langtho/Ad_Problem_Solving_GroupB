@@ -11,78 +11,23 @@
 
 using namespace std;
 
-bool constraint_checking(int& cache, int& video, ProblemData problem_data, vector<vector<bool>>& results);
-void add_video_to_cache(int& cache, int& video, vector<vector<bool>>& results);
 ProblemData read_problem_data();
 
 int main(int argc, char* argv[])
 {
-    double best_known_value = 0.0;
-    if (argc >= 2 && argv[1] != nullptr) {
-        best_known_value = stod(argv[1]);
-    }
-
-    string instance_name = "default_instance";
-    if (argc >= 3 && argv[2] != nullptr) {
-        instance_name = argv[2];
-    }
-
-    // Inside main()
-    float pop_size_override = -1.0f;
-    float cx_frac_override  = -1.0f;
-    float mut_rate_override = -1.0f;
-    float k_mult_override   = -1.0f;
-    float slack_ratio_override = -1.0f;
-    int elite_count_override = -1;
-    float noise_scale_override = -1.0f;
-    int stall_max_override = -1;
-
-    if (argc >= 4 && argv[3] != nullptr) pop_size_override = stof(argv[3]);
-    if (argc >= 5 && argv[4] != nullptr) cx_frac_override  = stof(argv[4]);
-    if (argc >= 6 && argv[5] != nullptr) mut_rate_override = stof(argv[5]);
-    if (argc >= 7 && argv[6] != nullptr) k_mult_override   = stof(argv[6]);
-    if (argc >= 8 && argv[7] != nullptr) slack_ratio_override = stof(argv[7]);
-    if (argc >= 9 && argv[8] != nullptr) elite_count_override = stoi(argv[8]);
-    if (argc >= 10 && argv[9] != nullptr) noise_scale_override = stof(argv[9]);
-    if (argc >= 11 && argv[10] != nullptr) stall_max_override = stoi(argv[10]);
-
+    // Production CLI: ./solver [seed] [max_time_seconds] < instance.in > instance.out
     unsigned int seed = 42;
-    if (argc >= 12 && argv[11] != nullptr) seed = static_cast<unsigned int>(stoul(argv[11]));
+    if (argc >= 2 && argv[1] != nullptr) seed = static_cast<unsigned int>(stoul(argv[1]));
 
     double max_time_seconds = 230.0;
-    if (argc >= 13 && argv[12] != nullptr) max_time_seconds = stod(argv[12]);
+    if (argc >= 3 && argv[2] != nullptr) max_time_seconds = stod(argv[2]);
 
     ProblemData problemData = read_problem_data();
 
-    ostringstream rn;
-    rn << instance_name
-       << "_pop"  << pop_size_override
-       << "_cx"   << cx_frac_override
-       << "_mut"  << mut_rate_override
-       << "_k"    << k_mult_override
-       << "_slk"  << slack_ratio_override
-       << "_eli"  << elite_count_override
-       << "_nsc"  << noise_scale_override
-       << "_stl"  << stall_max_override
-       << "_seed" << seed;
-
     SequenceSolver solver;
-    Solution sol = solver.run_benchmark(
-        problemData,
-        best_known_value,
-        rn.str(),
-        pop_size_override,
-        cx_frac_override,
-        mut_rate_override,
-        k_mult_override,
-        slack_ratio_override,
-        elite_count_override,
-        noise_scale_override,
-        stall_max_override,
-        seed,
-        max_time_seconds
-    );
+    Solution sol = solver.run_production(problemData, seed, max_time_seconds);
 
+    // Standard Google Hash Code submission format
     cout << problemData.nbr_caches << "\n";
     for (int i = 0; i < problemData.nbr_caches; i++) {
         cout << i << " ";
@@ -170,22 +115,6 @@ int eval_time_saved(const ProblemData& problemData, const vector<vector<bool>>& 
     }
 
     return total_requests > 0 ? static_cast<int>((total_saved * 1000) / total_requests) : 0;
-}
-
-bool constraint_checking(int& cache, int& video, ProblemData problem_data, vector<vector<bool>>& results)
-{
-    int cache_size = 0;
-    for (int i = 0; i < problem_data.nbr_videos; i++) {
-        if (results[cache][i] || i == video) {
-            cache_size += problem_data.videos[i];
-        }
-    }
-    return cache_size <= problem_data.cap_cache;
-}
-
-void add_video_to_cache(int& cache, int& video, vector<vector<bool>>& results)
-{
-    results[cache][video] = true;
 }
 
 #endif

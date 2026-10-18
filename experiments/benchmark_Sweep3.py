@@ -8,7 +8,7 @@ import itertools
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-EXECUTABLE = os.path.join(SCRIPT_DIR, "cmake-build-release", "solver")
+EXECUTABLE = os.path.join(SCRIPT_DIR, "../cmake-build-release", "solver")
 # Change BASE_DIR to use os.path.join with SCRIPT_DIR
 BASE_DIR = os.path.join(SCRIPT_DIR, "benchmark_results")
 LOGS_DIR = os.path.join(BASE_DIR, "raw_logs")
@@ -93,7 +93,7 @@ def main():
     os.makedirs(SWEEPS_DIR, exist_ok=True)
 
     # NO leading slashes here either
-    instances_dir = os.path.join(SCRIPT_DIR, "instances", "promo")
+    instances_dir = os.path.join(SCRIPT_DIR, "../instances", "promo")
     all_instances = glob.glob(os.path.join(instances_dir, "*.in"))
 
     if not all_instances:

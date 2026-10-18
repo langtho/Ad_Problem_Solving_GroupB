@@ -12,6 +12,7 @@ struct VideoOrder {
     std::vector<int> videos;
 };
 
+// Enum IDs preserved from Sweep 2 winning operators
 enum class InitStrategy {
     DENSITY_REQUEST_SORT = 3,
     HYBRID_COMPOSITE = 5
@@ -39,6 +40,7 @@ struct DynamicHyperparameters {
     int elite_count;
     double noise_scale;
     int stall_max;
+
     InitStrategy init_strat;
     CrossoverStrategy cx_strat;
     MutationStrategy mut_strat;
@@ -52,18 +54,8 @@ class SequenceSolver : public ISolver {
 public:
     Solution run(const ProblemData& problem, double best_known_value, const std::string& instance_name) override;
 
-    Solution run_benchmark(
+    Solution run_production(
         const ProblemData& problem,
-        double best_known_value,
-        const std::string& instance_name,
-        float pop_size_override = -1.0f,
-        float cx_frac_override = -1.0f,
-        float mut_rate_override = -1.0f,
-        float k_mult_override = -1.0f,
-        float slack_ratio_override = -1.0f,
-        int elite_count_override = -1,
-        float noise_scale_override = -1.0f,
-        int stall_max_override = -1,
         unsigned int seed = 42,
         double max_run_time_seconds = 230.0
     );
@@ -98,15 +90,7 @@ public:
 private:
     DynamicHyperparameters calculate_dynamic_hyperparameters(
         const ProblemData& problem,
-        const GreedyDecoder& decoder,
-        float pop_size_override,
-        float cx_frac_override,
-        float mut_rate_override,
-        float k_mult_override,
-        float slack_ratio_override,
-        int elite_count_override,
-        float noise_scale_override,
-        int stall_max_override
+        const GreedyDecoder& decoder
     );
 
     VideoOrder init_exact_greedy(const GreedyDecoder& decoder);
@@ -123,4 +107,4 @@ private:
     VideoOrder promote_unplaced(const VideoOrder& original, const std::vector<char>& placed, const std::function<double(void)>& rnd);
 };
 
-#endif
+#endif // CACHEPROBLEM_SEQUENCE_SOLVER_H
