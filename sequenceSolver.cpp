@@ -65,7 +65,9 @@ Solution SequenceSolver::run_production(
 
     ga.init_genes = [&](VideoOrder& s, const function<double(void)>& rnd) {
         if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
-            throw runtime_error("TIMEOUT");
+            ga.user_request_stop = true; // Signal the GA to stop
+            s.videos = decoder.candidate_videos(); // Provide a safe fallback dummy
+            return;
         }
         int idx;
         {
@@ -77,7 +79,9 @@ Solution SequenceSolver::run_production(
 
     ga.eval_solution = [&](const VideoOrder& s, double& score) -> bool {
         if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
-            throw runtime_error("TIMEOUT");
+            ga.user_request_stop = true;
+            score = 0.0;
+            return true;
         }
 
         DecodeParams params;
@@ -203,7 +207,7 @@ DynamicHyperparameters SequenceSolver::calculate_dynamic_hyperparameters(
         ? static_cast<double>(total_cache_cap) / total_video_size
         : 0.0;
 
-    // Dense networks favor high crossover exploitation; sparse networks require higher mutation
+    // Dynamic crossover & mutation baseline
     if (network_density > 0.4) {
         params.crossover_fraction = 0.8;
         params.mutation_rate = 0.1;
@@ -215,12 +219,23 @@ DynamicHyperparameters SequenceSolver::calculate_dynamic_hyperparameters(
         params.mutation_rate = 0.35;
     }
 
-    params.population_size = 40;
+    // Retain Sweep 3 tuned constants
     params.soft_slack_ratio = 1.05;
     params.stall_max = 1000;
 
-    // Bifurcate into Path A (Large/Dense) vs Path B (Small/Sparse) using Sweep 2 & 3 winners
+    // --- DYNAMIC POPULATION SIZE LOGIC ---
+    // Large/Dense matrices get a constrained population to prevent memory bloat and slow evaluations.
+    // Small/Sparse matrices scale dynamically based on the number of viable candidate videos.
+    if (matrix_complexity > 50000000) {
+        params.population_size = 25;
+    } else {
+        // Automatically scales population between 30 and 80 based on problem candidates
+        params.population_size = max(30, min(80, candidates_count / 40));
+    }
+
+    // Topological Routing (Path A vs Path B) with Sweep 3 winning parameters
     if (matrix_complexity > 50000000 || network_density > 0.4) {
+        // Path A (Large/Dense)
         params.init_strat    = InitStrategy::HYBRID_COMPOSITE;
         params.cx_strat      = CrossoverStrategy::ACTIVE_PREFIX_OX1;
         params.mut_strat     = MutationStrategy::PROMOTE_UNPLACED;
@@ -230,6 +245,7 @@ DynamicHyperparameters SequenceSolver::calculate_dynamic_hyperparameters(
         params.elite_count   = 2;
         params.noise_scale   = 0.75;
     } else {
+        // Path B (Small/Sparse)
         params.init_strat    = InitStrategy::DENSITY_REQUEST_SORT;
         params.cx_strat      = CrossoverStrategy::ACTIVE_SET_CROSSOVER;
         params.mut_strat     = MutationStrategy::PROMOTE_UNPLACED;
@@ -244,7 +260,6 @@ DynamicHyperparameters SequenceSolver::calculate_dynamic_hyperparameters(
         return params;
     }
 
-    // Scale active prefix window k proportionally to how many videos can physically fit in caches
     double adaptive_k_ratio = min(0.40, max(0.05, capacity_ratio * 1.5));
     params.active_k = max(2, static_cast<int>(candidates_count * adaptive_k_ratio));
 
