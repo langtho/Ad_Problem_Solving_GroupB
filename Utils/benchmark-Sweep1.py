@@ -26,7 +26,7 @@ BEST_KNOWN_VALUES = {
 EXECUTABLE = "./cmake-build-release/solver"
 
 # --- FOLDER STRUCTURE ---
-BASE_DIR = "benchmark_results"
+BASE_DIR = "../benchmark_results"
 LOGS_DIR = os.path.join(BASE_DIR, "raw_logs")
 SWEEPS_DIR = os.path.join(BASE_DIR, "sweeps")
 

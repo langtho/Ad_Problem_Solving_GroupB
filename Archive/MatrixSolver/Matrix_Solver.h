@@ -5,8 +5,8 @@
 #ifndef MATRIXSOLVER_H
 #define MATRIXSOLVER_H
 
-#include "Solver_Interface.h"
-#include "openGA.hpp"
+#include "../../Solver_Interface.h"
+#include "../../openGA.hpp"
 
 class MatrixSolver : public ISolver {
 public:

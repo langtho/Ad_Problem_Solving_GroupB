@@ -70,7 +70,7 @@ long long GreedyDecoder::decode(const vector<int>& order, Solution* solution) {
 long long GreedyDecoder::decode(const vector<int>& order, Solution* solution, const DecodeParams& params, const DecodeState* start_state, std::vector<DecodeState>* out_states) {
     switch (params.strategy) {
         case DecodingStrategy::SOFT_SLACK_REPAIRED:
-            return decode_soft_slack_repaired(order, solution);
+        return decode_soft_slack_repaired(order, solution, params);
 
         case DecodingStrategy::DEMAND_CACHE_CENTRIC:
             return decode_demand_cache_centric(order, solution);
@@ -172,14 +172,14 @@ long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution
     return total_requests ? (total_saved * 1000) / total_requests : 0;
 }
 
-long long GreedyDecoder::decode_soft_slack_repaired(const vector<int>& order, Solution* solution) {
+long long GreedyDecoder::decode_soft_slack_repaired(const vector<int>& order, Solution* solution, const DecodeParams& params) {
     for (size_t r = 0; r < best_latency.size(); ++r) {
         best_latency[r] = problem.endpoints[request_endpoint[r]];
     }
     fill(used_capacity.begin(), used_capacity.end(), 0);
 
     vector<vector<bool>> local_results(problem.nbr_caches, vector<bool>(problem.nbr_videos, false));
-    int soft_cap = static_cast<int>(problem.cap_cache * 1.15); // 15% Soft-Overflow
+    int soft_cap = static_cast<int>(problem.cap_cache * params.soft_slack_ratio);
 
     vector<vector<pair<int, long long>>> placed_items(problem.nbr_caches);
 

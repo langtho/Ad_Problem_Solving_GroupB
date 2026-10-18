@@ -4,7 +4,7 @@ Ce document accompagne la présentation `Genetic Algorithms Pitch.pptx`. Il reli
 
 ## Représentation d'une solution
 
-**Fichier :** `global.h`, structure `Solution` (lignes 23-26)
+**Fichier :** `../global.h`, structure `Solution` (lignes 23-26)
 
 ```cpp
 struct Solution {
@@ -42,7 +42,7 @@ Pour chaque cache, les vidéos sont parcourues à partir d'un indice de départ 
 
 ## 2. Évaluation
 
-**Fichier :** `sol.cpp`, `eval_time_saved` (lignes 86-113)
+**Fichier :** `../main.cpp`, `eval_time_saved` (lignes 86-113)
 
 ```cpp
 int eval_time_saved(const ProblemData& problemData,
@@ -104,15 +104,15 @@ ga.calculate_SO_total_fitness =
 ga.generation_max = 50;
 ```
 
-L'exécution s'arrête après 50 générations maximum. La librairie vérifie cette limite dans `openGA.hpp`, notamment dans la boucle de résolution et la condition d'arrêt. Dans cette version, aucune détection de stagnation personnalisée n'est ajoutée dans le projet.
+L'exécution s'arrête après 50 générations maximum. La librairie vérifie cette limite dans `../openGA.hpp`, notamment dans la boucle de résolution et la condition d'arrêt. Dans cette version, aucune détection de stagnation personnalisée n'est ajoutée dans le projet.
 
 ## 4. Sélection
 
-La sélection n'est pas réécrite dans notre code : elle est fournie par `openGA.hpp`. Elle reste néanmoins modifiable, car `openGA.hpp` est un fichier source inclus dans le projet.
+La sélection n'est pas réécrite dans notre code : elle est fournie par `../openGA.hpp`. Elle reste néanmoins modifiable, car `openGA.hpp` est un fichier source inclus dans le projet.
 
 ### Sélection des parents
 
-**Fichier :** `openGA.hpp`, `select_parent` (lignes 1580-1587)
+**Fichier :** `../openGA.hpp`, `select_parent` (lignes 1580-1587)
 
 ```cpp
 int select_parent(const thisGenerationType &g) {
@@ -131,7 +131,7 @@ La fonction tire un nombre aléatoire et choisit une position dans une distribut
 
 ### Calcul de la probabilité selon le rang
 
-**Fichier :** `openGA.hpp`, `generate_selection_chance` (lignes 1126-1142)
+**Fichier :** `../openGA.hpp`, `generate_selection_chance` (lignes 1126-1142)
 
 ```cpp
 void generate_selection_chance(thisGenerationType &gen,
@@ -158,7 +158,7 @@ C'est une sélection par rang non linéaire : le rang est utilisé plutôt que l
 
 ### Élites et sélection de la génération suivante
 
-**Fichier :** `openGA.hpp`, `select_population_SO` (lignes 1015-1057)
+**Fichier :** `../openGA.hpp`, `select_population_SO` (lignes 1015-1057)
 
 ```cpp
 void select_population_SO(const thisGenerationType &g,
@@ -190,7 +190,7 @@ void select_population_SO(const thisGenerationType &g,
 }
 ```
 
-Les meilleurs individus sont copiés directement grâce à l'élitisme. Le reste de la population est rempli avec la sélection par rang. Pour l'instant, nous utilisons donc la sélection de la librairie telle quelle ; il suffirait de modifier ou remplacer ces fonctions dans `openGA.hpp` pour essayer une sélection par tournoi, roulette ou autre stratégie.
+Les meilleurs individus sont copiés directement grâce à l'élitisme. Le reste de la population est rempli avec la sélection par rang. Pour l'instant, nous utilisons donc la sélection de la librairie telle quelle ; il suffirait de modifier ou remplacer ces fonctions dans `../openGA.hpp` pour essayer une sélection par tournoi, roulette ou autre stratégie.
 
 ## 5. Crossover
 
@@ -273,7 +273,7 @@ Ces valeurs sont, pour l'instant, arbitraires. Elles ont été choisies pour obt
 
 ## 8. Exécution et sortie
 
-Le point d'entrée est `sol.cpp`, qui lit l'instance puis appelle l'algorithme (lignes 69-71) :
+Le point d'entrée est `../main.cpp`, qui lit l'instance puis appelle l'algorithme (lignes 69-71) :
 
 ```cpp
 Solution sol = run_evol_algo(problemData);
@@ -316,4 +316,4 @@ Initialisation
     -> Répétition jusqu'à 50 générations
 ```
 
-La logique spécifique au problème se trouve surtout dans `evolAlgo.cpp` et `sol.cpp`. La mécanique générique de sélection est actuellement fournie par `openGA.hpp`, mais elle reste accessible et modifiable dans le projet.
+La logique spécifique au problème se trouve surtout dans `evolAlgo.cpp` et `../main.cpp`. La mécanique générique de sélection est actuellement fournie par `openGA.hpp`, mais elle reste accessible et modifiable dans le projet.

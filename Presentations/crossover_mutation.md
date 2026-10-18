@@ -1,6 +1,6 @@
 # Crossovers et mutations du `SequenceSolver`
 
-Ce document décrit le fonctionnement de chaque mutation (et, plus brièvement, de chaque crossover) de [sequenceSolver.cpp](sequenceSolver.cpp), puis compare les six mutations (section 4) et les sept crossovers (section 5) sur la moitié des instances de `instances/promo`.
+Ce document décrit le fonctionnement de chaque mutation (et, plus brièvement, de chaque crossover) de [sequenceSolver.cpp](../sequenceSolver.cpp), puis compare les six mutations (section 4) et les sept crossovers (section 5) sur la moitié des instances de `../instances/promo`.
 
 ## 1. Contexte : ce qu'un opérateur modifie réellement
 
@@ -151,7 +151,7 @@ Si toutes les vidéos sont placées, ou aucune, la mutation se rabat sur `BASELI
 
 ### Protocole
 
-- **Instances** : 14 des 29 instances de `instances/promo`. Les cinq instances jouets (20 vidéos ou moins) sont exclues, et le reste est choisi pour couvrir chaque famille (denses, creuses, zipf, régionales, réalistes, grandes capacités).
+- **Instances** : 14 des 29 instances de `../instances/promo`. Les cinq instances jouets (20 vidéos ou moins) sont exclues, et le reste est choisi pour couvrir chaque famille (denses, creuses, zipf, régionales, réalistes, grandes capacités).
 - **Configuration fixe** : init 2 (`NOISY_PRIORITY_ADD`), crossover 1 (`ACTIVE_PREFIX_OX1`), pas de recherche locale, décodeur 0 (`STATIC_GREEDY`). La recherche locale est coupée pour isoler l'effet de la mutation.
 - **Paramètres du GA** : ceux du code (population 30, 50 générations max, `mutation_rate` 0,2, arrêt après 10 générations sans progrès).
 - **Graines** : 5 par couple instance × mutation (graines 1 à 5), soit 420 runs. Pour une graine donnée, la population initiale est la même quelle que soit la mutation.
@@ -256,8 +256,8 @@ Pour relancer un run : `solver <best_known> <nom> <init> <cx> <mut> <ls> <dec> [
 
 Le protocole est celui de la section 4, en faisant varier le crossover au lieu de la mutation.
 
-- **Instances** : les mêmes 14 instances de `instances/promo`.
-- **Configuration fixe** : init 2 (`NOISY_PRIORITY_ADD`), mutation 2 (`ACTIVE_PREFIX_INVERSION`, celle de la configuration par défaut de `benchmark.py`), pas de recherche locale, décodeur 0 (`STATIC_GREEDY`).
+- **Instances** : les mêmes 14 instances de `../instances/promo`.
+- **Configuration fixe** : init 2 (`NOISY_PRIORITY_ADD`), mutation 2 (`ACTIVE_PREFIX_INVERSION`, celle de la configuration par défaut de `../Utils/benchmark-Sweep1.py`), pas de recherche locale, décodeur 0 (`STATIC_GREEDY`).
 - **Paramètres du GA** : ceux du code, inchangés.
 - **Graines** : 5 par couple instance × crossover (graines 1 à 5), soit 490 runs. Les 70 runs du crossover 1 sont ceux de la colonne `PREFIX_INVERSION` de la section 4.
 - **Mesure** : gain du meilleur score final par rapport au meilleur individu de la génération 0, en %, moyenné sur les 5 graines.

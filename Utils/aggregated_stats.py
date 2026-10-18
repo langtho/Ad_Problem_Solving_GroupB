@@ -5,8 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict
 
-BASE_DIR = "benchmark_results"
-LOGS_DIR = "benchmark_results"
+BASE_DIR = "../benchmark_results"
+LOGS_DIR = "../benchmark_results"
 PLOTS_DIR = os.path.join(BASE_DIR, "plots")
 HTML_FILE = os.path.join(BASE_DIR, "benchmark_report.html")
 

@@ -12,11 +12,11 @@ find_package(Threads REQUIRED)
 
 # Add both source files into one executable
 
-add_executable(solver sol.cpp matrixSolver.cpp sequenceSolver.cpp
+add_executable(solver main.cpp Archive/MatrixSolver/matrixSolver.cpp sequenceSolver.cpp
         global.h
         Solver_Interface.h
         Sequence_Solver.h
-        Matrix_Solver.h greedy.h greedy.cpp )
+        Archive/MatrixSolver/Matrix_Solver.h greedy.h greedy.cpp )
 
 
 # Link pthread to the target
