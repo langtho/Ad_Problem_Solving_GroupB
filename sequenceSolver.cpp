@@ -172,7 +172,7 @@ Solution SequenceSolver::run_benchmark(
 
     generate_json_output(
         instance_name, history, eval_count, current_gen,
-        best_fitness, elapsed.count(), pop_size, "benchmark_results"
+        best_fitness, elapsed.count(), pop_size, "../benchmark_results/raw_logs"
     );
 
     return final_solution;

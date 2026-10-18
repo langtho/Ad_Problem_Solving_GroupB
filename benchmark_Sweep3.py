@@ -7,8 +7,10 @@ import csv
 import itertools
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
-EXECUTABLE = os.path.abspath("../cmake-build-release/solver")
-BASE_DIR = os.path.abspath("../benchmark_results")
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+EXECUTABLE = os.path.join(SCRIPT_DIR, "cmake-build-release", "solver")
+# Change BASE_DIR to use os.path.join with SCRIPT_DIR
+BASE_DIR = os.path.join(SCRIPT_DIR, "benchmark_results")
 LOGS_DIR = os.path.join(BASE_DIR, "raw_logs")
 SWEEPS_DIR = os.path.join(BASE_DIR, "sweeps")
 
@@ -27,8 +29,18 @@ GRID = {
     "stall": [-1, 500]
 }
 
+# Helper to match C++ ostringstream float formatting
+def fmt(val):
+    if isinstance(val, float) and val.is_integer():
+        return str(int(val))
+    return str(val)
+
 def execute_solver(cfg, instance_path, instance_name, seed):
-    run_name = f"{instance_name}_pop{cfg['pop_size']}_cx{cfg['cx_frac']}_mut{cfg['mut_rate']}_k{cfg['k_mult']}_slk{cfg['slack']}_eli{cfg['elite']}_nsc{cfg['noise']}_stl{cfg['stall']}_seed{seed}"
+    # Use fmt() so Python strings exactly match the C++ output filenames
+    run_name = (f"{instance_name}_pop{fmt(cfg['pop_size'])}_cx{fmt(cfg['cx_frac'])}"
+                f"_mut{fmt(cfg['mut_rate'])}_k{fmt(cfg['k_mult'])}_slk{fmt(cfg['slack'])}"
+                f"_eli{cfg['elite']}_nsc{fmt(cfg['noise'])}_stl{cfg['stall']}_seed{seed}")
+
     out_txt = os.path.join(LOGS_DIR, f"out_{run_name}.txt")
     out_json = os.path.join(LOGS_DIR, f"fit_{run_name}.json")
 
@@ -41,9 +53,13 @@ def execute_solver(cfg, instance_path, instance_name, seed):
         str(seed), str(MAX_TIME_SECONDS)
     ]
 
+    config_key = (f"pop{fmt(cfg['pop_size'])}_cx{fmt(cfg['cx_frac'])}_mut{fmt(cfg['mut_rate'])}"
+                  f"_k{fmt(cfg['k_mult'])}_slk{fmt(cfg['slack'])}_eli{cfg['elite']}"
+                  f"_nsc{fmt(cfg['noise'])}_stl{cfg['stall']}")
+
     fallback_data = {
         "instance": instance_name,
-        "config_key": f"pop{cfg['pop_size']}_cx{cfg['cx_frac']}_mut{cfg['mut_rate']}_k{cfg['k_mult']}_slk{cfg['slack']}_eli{cfg['elite']}_nsc{cfg['noise']}_stl{cfg['stall']}",
+        "config_key": config_key,
         "best_fitness_achieved": 0.0
     }
 
@@ -76,8 +92,13 @@ def main():
     os.makedirs(LOGS_DIR, exist_ok=True)
     os.makedirs(SWEEPS_DIR, exist_ok=True)
 
-    instances_dir = os.path.abspath("../instances/promo")
+    # NO leading slashes here either
+    instances_dir = os.path.join(SCRIPT_DIR, "instances", "promo")
     all_instances = glob.glob(os.path.join(instances_dir, "*.in"))
+
+    if not all_instances:
+        print(f"ERROR: No .in files found in {instances_dir}")
+        return
 
     keys, values = zip(*GRID.items())
     combinations = [dict(zip(keys, v)) for v in itertools.product(*values)]
