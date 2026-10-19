@@ -15,7 +15,7 @@ Solution SequenceSolver::run(const ProblemData& problem, double, const string&) 
 
 Solution SequenceSolver::run_production(
     const ProblemData& problem,
-    unsigned int base_seed,
+    unsigned int seed,
     double max_run_time_seconds
 ) {
     auto start_time = chrono::high_resolution_clock::now();
@@ -30,134 +30,154 @@ Solution SequenceSolver::run_production(
 
     DynamicHyperparameters dyn_params = calculate_dynamic_hyperparameters(problem, decoder);
 
-    VideoOrder overall_best_order;
-    double overall_best_fitness = -1.0;
-    mutex pheno_mutex, state_mutex;
+    Perm_Engine ga;
+    ga.set_seed(seed);
+    ga.multi_threading = true;
+    ga.problem_mode = EA::GA_MODE::SOGA;
+
+    // Set to maximums so the engine never stops early; it will run until the 230s timeout
+    ga.generation_max = 100000;
+    ga.best_stall_max = 100000;
+    ga.average_stall_max = 100000;
+    ga.verbose = false;
+    ga.tol_stall_best = 1e-6;
+    ga.tol_stall_average = 1e-6;
+
+    ga.population = dyn_params.population_size;
+    ga.crossover_fraction = dyn_params.crossover_fraction;
+    ga.mutation_rate = dyn_params.mutation_rate;
+    ga.elite_count = dyn_params.elite_count;
+
+    const int active_k = dyn_params.active_k;
+    const int pop_size = ga.population;
+    const double noise_scale = dyn_params.noise_scale;
+    const double soft_slack = dyn_params.soft_slack_ratio;
+    const InitStrategy init_strat = dyn_params.init_strat;
+    const CrossoverStrategy cx_strat = dyn_params.cx_strat;
+    const MutationStrategy mut_strat = dyn_params.mut_strat;
+    const DecodingStrategy dec_strat = dyn_params.dec_strat;
+
     set<size_t> generation_phenotypes;
+    mutex pheno_mutex, state_mutex;
 
-    int restart_count = 0;
+    int ind_counter = 0;
+    double best_fitness = -1.0;
+    VideoOrder global_best_order;
 
-    // CONTINUOUS RESTART LOOP: Squeeze every drop of optimization out of the time limit
-    while (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() < max_run_time_seconds - 3.0) {
-        Perm_Engine ga;
+    // --- IN-FLIGHT RESTART TRACKING ---
+    atomic<bool> cataclysm_active{false};
+    int stall_count = 0;
+    double last_gen_best = -1.0;
 
-        // Different seed per restart guarantees we explore new areas of the search space
-        ga.set_seed(base_seed + restart_count);
-        ga.multi_threading = true;
-        ga.problem_mode = EA::GA_MODE::SOGA;
-        ga.generation_max = 10000;
-        ga.verbose = false;
-        ga.tol_stall_best = 1e-6;
-        ga.tol_stall_average = 1e-6;
+    ga.init_genes = [&](VideoOrder& s, const function<double(void)>& rnd) {
+        int idx;
+        {
+            lock_guard<mutex> lock(state_mutex);
+            idx = ind_counter++;
+        }
+        s = generate_initial_individual(init_strat, decoder, idx, pop_size, active_k, noise_scale, rnd);
+    };
 
-        ga.population = dyn_params.population_size;
-        ga.crossover_fraction = dyn_params.crossover_fraction;
-        ga.mutation_rate = dyn_params.mutation_rate;
-        ga.elite_count = dyn_params.elite_count;
+    ga.eval_solution = [&](const VideoOrder& s, double& score) -> bool {
+        DecodeParams params;
+        params.strategy = dec_strat;
+        params.soft_slack_ratio = soft_slack;
 
-        // Lower stall_max so we detect stagnation quickly and restart the search
-        ga.best_stall_max = 150;
-        ga.average_stall_max = 150;
+        Solution sol;
+        score = static_cast<double>(decoder.decode(s.videos, &sol, params));
 
-        int ind_counter = 0;
+        size_t p_hash = sol.used_capacity.size();
+        for (int cap : sol.used_capacity) {
+            p_hash ^= cap + 0x9e3779b9 + (p_hash << 6) + (p_hash >> 2);
+        }
 
-        ga.init_genes = [&](VideoOrder& s, const function<double(void)>& rnd) {
-            // Thread-safe Soft Stop: Fast return the baseline if time is out
-            if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
-                s.videos = decoder.priority_order();
-                return;
+        {
+            lock_guard<mutex> lock(state_mutex);
+            if (score > best_fitness) {
+                best_fitness = score;
+                global_best_order = s;
             }
-            int idx;
-            {
-                lock_guard<mutex> lock(state_mutex);
-                idx = ind_counter++;
-            }
+        }
 
-            // Inject the global best sequence into the new population to keep climbing
-            if (idx == 0 && !overall_best_order.videos.empty()) {
-                s = overall_best_order;
+        {
+            lock_guard<mutex> lock(pheno_mutex);
+            if (generation_phenotypes.count(p_hash)) {
+                score *= 0.90; // Diversity penalty
             } else {
-                s = generate_initial_individual(dyn_params.init_strat, decoder, idx, ga.population, dyn_params.active_k, dyn_params.noise_scale, rnd);
+                generation_phenotypes.insert(p_hash);
             }
-        };
+        }
+        return true;
+    };
 
-        ga.eval_solution = [&](const VideoOrder& s, double& score) -> bool {
-            // Thread-safe Soft Stop: Bypass heavy evaluation, return 0.0 so thread exits peacefully
-            if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
-                score = 0.0;
-                return true;
-            }
+    ga.calculate_SO_total_fitness = [](const Perm_Engine::thisChromosomeType& c) -> double {
+        return -c.middle_costs;
+    };
 
-            DecodeParams params;
-            params.strategy = dyn_params.dec_strat;
-            params.soft_slack_ratio = dyn_params.soft_slack_ratio;
+    ga.mutate = [&](const VideoOrder& s, const function<double(void)>& rnd, double) -> VideoOrder {
+        // IN-FLIGHT RESTART: If the GA is stalled, ignore standard mutation and inject massive random diversity
+        if (cataclysm_active.load()) {
+            return init_noisy_add(decoder, 1.5, rnd); // Massive 1.5x noise variance
+        }
 
-            Solution sol;
-            score = static_cast<double>(decoder.decode(s.videos, &sol, params));
+        vector<char> placed;
+        DecodeParams params;
+        params.strategy = dec_strat;
+        params.soft_slack_ratio = soft_slack;
 
-            size_t p_hash = sol.used_capacity.size();
-            for (int cap : sol.used_capacity) {
-                p_hash ^= cap + 0x9e3779b9 + (p_hash << 6) + (p_hash >> 2);
-            }
+        decoder.decode(s.videos, nullptr, params, &placed);
+        return execute_mutation(mut_strat, s, active_k, rnd, &placed);
+    };
 
-            {
-                lock_guard<mutex> lock(state_mutex);
-                if (score > overall_best_fitness) {
-                    overall_best_fitness = score;
-                    overall_best_order = s;
-                }
-            }
+    ga.crossover = [&](const VideoOrder& p1, const VideoOrder& p2, const function<double(void)>& rnd) -> VideoOrder {
+        return execute_crossover(cx_strat, p1, p2, problem.nbr_videos, active_k, rnd);
+    };
 
-            {
-                lock_guard<mutex> lock(pheno_mutex);
-                if (generation_phenotypes.count(p_hash)) {
-                    score *= 0.90; // Diversity penalty for clones
-                } else {
-                    generation_phenotypes.insert(p_hash);
-                }
-            }
-            return true;
-        };
+    ga.SO_report_generation = [&](int, const Perm_Engine::thisGenerationType&, const VideoOrder&) {
+        {
+            lock_guard<mutex> lock(pheno_mutex);
+            generation_phenotypes.clear();
+        }
 
-        ga.calculate_SO_total_fitness = [](const Perm_Engine::thisChromosomeType& c) -> double {
-            return -c.middle_costs;
-        };
+        // --- MANAGE CATACLYSMIC RESTART ---
+        double current_best;
+        {
+            lock_guard<mutex> lock(state_mutex);
+            current_best = best_fitness;
+        }
 
-        ga.mutate = [&](const VideoOrder& s, const function<double(void)>& rnd, double) -> VideoOrder {
-            vector<char> placed;
-            DecodeParams params;
-            params.strategy = dyn_params.dec_strat;
-            params.soft_slack_ratio = dyn_params.soft_slack_ratio;
+        if (current_best > last_gen_best + 1e-5) {
+            last_gen_best = current_best;
+            stall_count = 0;
+            cataclysm_active = false;
+        } else {
+            stall_count++;
+        }
 
-            // Run fast pre-decode using the *correct* path strategy so PROMOTE_UNPLACED is accurate
-            decoder.decode(s.videos, nullptr, params, &placed);
-            return execute_mutation(dyn_params.mut_strat, s, dyn_params.active_k, rnd, &placed);
-        };
+        if (stall_count > 150) {
+            cataclysm_active = true; // Trigger mass diversity injection
+            stall_count = 0;         // Reset so the injection lasts for 10 generations
+        } else if (stall_count > 10) {
+            cataclysm_active = false; // Turn off injection, resume climbing
+        }
 
-        ga.crossover = [&](const VideoOrder& p1, const VideoOrder& p2, const function<double(void)>& rnd) -> VideoOrder {
-            return execute_crossover(dyn_params.cx_strat, p1, p2, problem.nbr_videos, dyn_params.active_k, rnd);
-        };
+        // --- MAIN THREAD TIMEOUT ---
+        // Safely aborts the engine between generations when all worker threads are idle
+        if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
+            throw runtime_error("TIMEOUT");
+        }
+    };
 
-        ga.SO_report_generation = [&](int, const Perm_Engine::thisGenerationType&, const VideoOrder&) {
-            {
-                lock_guard<mutex> lock(pheno_mutex);
-                generation_phenotypes.clear();
-            }
-            if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
-                ga.user_request_stop = true;
-            }
-        };
-
-        try {
-            ga.solve();
-        } catch (const runtime_error&) {}
-
-        restart_count++;
+    try {
+        ga.solve();
+    } catch (const runtime_error& e) {
+        // Graceful stop without memory corruption
+        if (string(e.what()) != "TIMEOUT") throw;
     }
 
-    // Safety fallback: if GA found nothing before timing out, use the raw priority order
-    if (overall_best_order.videos.empty()) {
-        overall_best_order.videos = decoder.priority_order();
+    // Safety fallback
+    if (global_best_order.videos.empty()) {
+        global_best_order.videos = decoder.priority_order();
     }
 
     Solution final_solution;
@@ -165,9 +185,9 @@ Solution SequenceSolver::run_production(
     final_solution.used_capacity.assign(problem.nbr_caches, 0);
 
     DecodeParams final_params;
-    final_params.strategy = dyn_params.dec_strat;
-    final_params.soft_slack_ratio = dyn_params.soft_slack_ratio;
-    final_solution.sequence = overall_best_order.videos;
+    final_params.strategy = dec_strat;
+    final_params.soft_slack_ratio = soft_slack;
+    final_solution.sequence = global_best_order.videos;
     decoder.decode(final_solution.sequence, &final_solution, final_params);
 
     return final_solution;
@@ -222,7 +242,7 @@ DynamicHyperparameters SequenceSolver::calculate_dynamic_hyperparameters(
         params.mut_strat     = MutationStrategy::PROMOTE_UNPLACED;
         params.ls_strat      = LocalSearchStrategy::NONE;
         // SWEEP 2 OVERRIDE: Unlock Multi-Placement universally
-        params.dec_strat     = DecodingStrategy::STATIC_GREEDY;
+        params.dec_strat     = DecodingStrategy::SOFT_SLACK_REPAIRED;
         params.mutation_rate = 0.25;
         params.elite_count   = 2;
         params.noise_scale   = 0.75;
