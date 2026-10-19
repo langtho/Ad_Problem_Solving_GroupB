@@ -15,7 +15,7 @@ Solution SequenceSolver::run(const ProblemData& problem, double, const string&) 
 
 Solution SequenceSolver::run_production(
     const ProblemData& problem,
-    unsigned int seed,
+    unsigned int base_seed,
     double max_run_time_seconds
 ) {
     auto start_time = chrono::high_resolution_clock::now();
@@ -30,145 +30,145 @@ Solution SequenceSolver::run_production(
 
     DynamicHyperparameters dyn_params = calculate_dynamic_hyperparameters(problem, decoder);
 
-    Perm_Engine ga;
-    ga.set_seed(seed);
-    ga.multi_threading = true;
-    ga.problem_mode = EA::GA_MODE::SOGA;
-    ga.generation_max = 10000;
-    ga.verbose = false;
-    ga.tol_stall_best = 1e-6;
-    ga.tol_stall_average = 1e-6;
-
-    ga.population = dyn_params.population_size;
-    ga.crossover_fraction = dyn_params.crossover_fraction;
-    ga.mutation_rate = dyn_params.mutation_rate;
-    ga.elite_count = dyn_params.elite_count;
-    ga.best_stall_max = dyn_params.stall_max;
-    ga.average_stall_max = dyn_params.stall_max;
-
-    const int active_k = dyn_params.active_k;
-    const int pop_size = ga.population;
-    const double noise_scale = dyn_params.noise_scale;
-    const double soft_slack = dyn_params.soft_slack_ratio;
-    const InitStrategy init_strat = dyn_params.init_strat;
-    const CrossoverStrategy cx_strat = dyn_params.cx_strat;
-    const MutationStrategy mut_strat = dyn_params.mut_strat;
-    const DecodingStrategy dec_strat = dyn_params.dec_strat;
-
+    VideoOrder overall_best_order;
+    double overall_best_fitness = -1.0;
+    mutex pheno_mutex, state_mutex;
     set<size_t> generation_phenotypes;
-    mutex pheno_mutex;
-    mutex state_mutex;
 
-    int ind_counter = 0;
-    double best_fitness = -1.0;
-    VideoOrder global_best_order;
+    int restart_count = 0;
 
-    ga.init_genes = [&](VideoOrder& s, const function<double(void)>& rnd) {
-        if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
-            ga.user_request_stop = true; // Signal the GA to stop
-            s.videos = decoder.candidate_videos(); // Provide a safe fallback dummy
-            return;
-        }
-        int idx;
-        {
-            lock_guard<mutex> lock(state_mutex);
-            idx = ind_counter++;
-        }
-        s = generate_initial_individual(init_strat, decoder, idx, pop_size, active_k, noise_scale, rnd);
-    };
+    // CONTINUOUS RESTART LOOP: Squeeze every drop of optimization out of the time limit
+    while (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() < max_run_time_seconds - 3.0) {
+        Perm_Engine ga;
 
-    ga.eval_solution = [&](const VideoOrder& s, double& score) -> bool {
-        if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
-            ga.user_request_stop = true;
-            score = 0.0;
-            return true;
-        }
+        // Different seed per restart guarantees we explore new areas of the search space
+        ga.set_seed(base_seed + restart_count);
+        ga.multi_threading = true;
+        ga.problem_mode = EA::GA_MODE::SOGA;
+        ga.generation_max = 10000;
+        ga.verbose = false;
+        ga.tol_stall_best = 1e-6;
+        ga.tol_stall_average = 1e-6;
 
-        DecodeParams params;
-        params.strategy = dec_strat;
-        params.soft_slack_ratio = soft_slack;
+        ga.population = dyn_params.population_size;
+        ga.crossover_fraction = dyn_params.crossover_fraction;
+        ga.mutation_rate = dyn_params.mutation_rate;
+        ga.elite_count = dyn_params.elite_count;
 
-        Solution sol;
-        score = static_cast<double>(decoder.decode(s.videos, &sol, params));
+        // Lower stall_max so we detect stagnation quickly and restart the search
+        ga.best_stall_max = 150;
+        ga.average_stall_max = 150;
 
-        // Boost-style hash of cache fill levels to detect phenotypic clones
-        size_t p_hash = sol.used_capacity.size();
-        for (int cap : sol.used_capacity) {
-            p_hash ^= cap + 0x9e3779b9 + (p_hash << 6) + (p_hash >> 2);
-        }
+        int ind_counter = 0;
 
-        // Track raw unpenalized score for global best before applying duplicate penalty
-        {
-            lock_guard<mutex> lock(state_mutex);
-            if (score > best_fitness) {
-                best_fitness = score;
-                global_best_order = s;
+        ga.init_genes = [&](VideoOrder& s, const function<double(void)>& rnd) {
+            // Thread-safe Soft Stop: Fast return the baseline if time is out
+            if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
+                s.videos = decoder.priority_order();
+                return;
             }
-        }
+            int idx;
+            {
+                lock_guard<mutex> lock(state_mutex);
+                idx = ind_counter++;
+            }
 
-        // Penalize duplicate phenotypes by 10% so selection favors diverse cache allocations
-        {
-            lock_guard<mutex> lock(pheno_mutex);
-            if (generation_phenotypes.count(p_hash)) {
-                score *= 0.90;
+            // Inject the global best sequence into the new population to keep climbing
+            if (idx == 0 && !overall_best_order.videos.empty()) {
+                s = overall_best_order;
             } else {
-                generation_phenotypes.insert(p_hash);
+                s = generate_initial_individual(dyn_params.init_strat, decoder, idx, ga.population, dyn_params.active_k, dyn_params.noise_scale, rnd);
             }
-        }
-        return true;
-    };
+        };
 
-    // Negate score because OpenGA minimizes middle_costs by default
-    ga.calculate_SO_total_fitness = [](const Perm_Engine::thisChromosomeType& c) -> double {
-        return -c.middle_costs;
-    };
+        ga.eval_solution = [&](const VideoOrder& s, double& score) -> bool {
+            // Thread-safe Soft Stop: Bypass heavy evaluation, return 0.0 so thread exits peacefully
+            if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
+                score = 0.0;
+                return true;
+            }
 
-    ga.mutate = [&](const VideoOrder& s, const function<double(void)>& rnd, double) -> VideoOrder {
-        // Run fast static greedy decode to identify which videos failed to fit in any cache
-        vector<char> placed;
-        decoder.decode(s.videos, nullptr, &placed);
-        return execute_mutation(mut_strat, s, active_k, rnd, &placed);
-    };
+            DecodeParams params;
+            params.strategy = dyn_params.dec_strat;
+            params.soft_slack_ratio = dyn_params.soft_slack_ratio;
 
-    ga.crossover = [&](const VideoOrder& p1, const VideoOrder& p2, const function<double(void)>& rnd) -> VideoOrder {
-        return execute_crossover(cx_strat, p1, p2, problem.nbr_videos, active_k, rnd);
-    };
+            Solution sol;
+            score = static_cast<double>(decoder.decode(s.videos, &sol, params));
 
-    ga.SO_report_generation = [&](int, const Perm_Engine::thisGenerationType&, const VideoOrder&) {
-        {
-            lock_guard<mutex> lock(pheno_mutex);
-            generation_phenotypes.clear();
-        }
-        if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
-            ga.user_request_stop = true;
-        }
-    };
+            size_t p_hash = sol.used_capacity.size();
+            for (int cap : sol.used_capacity) {
+                p_hash ^= cap + 0x9e3779b9 + (p_hash << 6) + (p_hash >> 2);
+            }
 
-    try {
-        ga.solve();
-    } catch (const runtime_error&) {
-        // Hard timeout reached mid-generation; fall through to reconstruct best found solution
+            {
+                lock_guard<mutex> lock(state_mutex);
+                if (score > overall_best_fitness) {
+                    overall_best_fitness = score;
+                    overall_best_order = s;
+                }
+            }
+
+            {
+                lock_guard<mutex> lock(pheno_mutex);
+                if (generation_phenotypes.count(p_hash)) {
+                    score *= 0.90; // Diversity penalty for clones
+                } else {
+                    generation_phenotypes.insert(p_hash);
+                }
+            }
+            return true;
+        };
+
+        ga.calculate_SO_total_fitness = [](const Perm_Engine::thisChromosomeType& c) -> double {
+            return -c.middle_costs;
+        };
+
+        ga.mutate = [&](const VideoOrder& s, const function<double(void)>& rnd, double) -> VideoOrder {
+            vector<char> placed;
+            DecodeParams params;
+            params.strategy = dyn_params.dec_strat;
+            params.soft_slack_ratio = dyn_params.soft_slack_ratio;
+
+            // Run fast pre-decode using the *correct* path strategy so PROMOTE_UNPLACED is accurate
+            decoder.decode(s.videos, nullptr, params, &placed);
+            return execute_mutation(dyn_params.mut_strat, s, dyn_params.active_k, rnd, &placed);
+        };
+
+        ga.crossover = [&](const VideoOrder& p1, const VideoOrder& p2, const function<double(void)>& rnd) -> VideoOrder {
+            return execute_crossover(dyn_params.cx_strat, p1, p2, problem.nbr_videos, dyn_params.active_k, rnd);
+        };
+
+        ga.SO_report_generation = [&](int, const Perm_Engine::thisGenerationType&, const VideoOrder&) {
+            {
+                lock_guard<mutex> lock(pheno_mutex);
+                generation_phenotypes.clear();
+            }
+            if (chrono::duration<double>(chrono::high_resolution_clock::now() - start_time).count() >= max_run_time_seconds) {
+                ga.user_request_stop = true;
+            }
+        };
+
+        try {
+            ga.solve();
+        } catch (const runtime_error&) {}
+
+        restart_count++;
+    }
+
+    // Safety fallback: if GA found nothing before timing out, use the raw priority order
+    if (overall_best_order.videos.empty()) {
+        overall_best_order.videos = decoder.priority_order();
     }
 
     Solution final_solution;
     final_solution.results.assign(problem.nbr_caches, vector<bool>(problem.nbr_videos, false));
     final_solution.used_capacity.assign(problem.nbr_caches, 0);
 
-    VideoOrder best_final_order = global_best_order;
-    const auto& chromosomes = ga.last_generation.chromosomes;
-    if (best_final_order.videos.empty() && !chromosomes.empty() &&
-        ga.last_generation.best_chromosome_index >= 0 &&
-        ga.last_generation.best_chromosome_index < static_cast<int>(chromosomes.size())) {
-        best_final_order = chromosomes[ga.last_generation.best_chromosome_index].genes;
-    }
-
-    if (!best_final_order.videos.empty()) {
-        DecodeParams final_params;
-        final_params.strategy = dec_strat;
-        final_params.soft_slack_ratio = soft_slack;
-        final_solution.sequence = best_final_order.videos;
-        decoder.decode(final_solution.sequence, &final_solution, final_params);
-    }
+    DecodeParams final_params;
+    final_params.strategy = dyn_params.dec_strat;
+    final_params.soft_slack_ratio = dyn_params.soft_slack_ratio;
+    final_solution.sequence = overall_best_order.videos;
+    decoder.decode(final_solution.sequence, &final_solution, final_params);
 
     return final_solution;
 }
@@ -185,29 +185,18 @@ DynamicHyperparameters SequenceSolver::calculate_dynamic_hyperparameters(
     long long actual_connections = 0;
     for (int e = 0; e < problem.nbr_endpoints; ++e) {
         for (int c = 0; c < problem.nbr_caches; ++c) {
-            if (problem.network[e][c] > 0) {
-                actual_connections++;
-            }
+            if (problem.network[e][c] > 0) actual_connections++;
         }
     }
 
-    double network_density = possible_connections > 0
-        ? static_cast<double>(actual_connections) / possible_connections
-        : 0.0;
-
+    double network_density = possible_connections > 0 ? static_cast<double>(actual_connections) / possible_connections : 0.0;
     long long matrix_complexity = static_cast<long long>(problem.nbr_videos) * problem.nbr_endpoints * problem.nbr_caches;
 
     long long total_cache_cap = static_cast<long long>(problem.nbr_caches) * problem.cap_cache;
     long long total_video_size = 0;
-    for (int s : problem.videos) {
-        total_video_size += s;
-    }
+    for (int s : problem.videos) total_video_size += s;
+    double capacity_ratio = total_video_size > 0 ? static_cast<double>(total_cache_cap) / total_video_size : 0.0;
 
-    double capacity_ratio = total_video_size > 0
-        ? static_cast<double>(total_cache_cap) / total_video_size
-        : 0.0;
-
-    // Dynamic crossover & mutation baseline
     if (network_density > 0.4) {
         params.crossover_fraction = 0.8;
         params.mutation_rate = 0.1;
@@ -219,33 +208,25 @@ DynamicHyperparameters SequenceSolver::calculate_dynamic_hyperparameters(
         params.mutation_rate = 0.35;
     }
 
-    // Retain Sweep 3 tuned constants
     params.soft_slack_ratio = 1.05;
-    params.stall_max = 1000;
 
-    // --- DYNAMIC POPULATION SIZE LOGIC ---
-    // Large/Dense matrices get a constrained population to prevent memory bloat and slow evaluations.
-    // Small/Sparse matrices scale dynamically based on the number of viable candidate videos.
     if (matrix_complexity > 50000000) {
         params.population_size = 25;
     } else {
-        // Automatically scales population between 30 and 80 based on problem candidates
         params.population_size = max(30, min(80, candidates_count / 40));
     }
 
-    // Topological Routing (Path A vs Path B) with Sweep 3 winning parameters
     if (matrix_complexity > 50000000 || network_density > 0.4) {
-        // Path A (Large/Dense)
         params.init_strat    = InitStrategy::HYBRID_COMPOSITE;
         params.cx_strat      = CrossoverStrategy::ACTIVE_PREFIX_OX1;
         params.mut_strat     = MutationStrategy::PROMOTE_UNPLACED;
         params.ls_strat      = LocalSearchStrategy::NONE;
-        params.dec_strat     = DecodingStrategy::SOFT_SLACK_REPAIRED;
+        // SWEEP 2 OVERRIDE: Unlock Multi-Placement universally
+        params.dec_strat     = DecodingStrategy::STATIC_GREEDY;
         params.mutation_rate = 0.25;
         params.elite_count   = 2;
         params.noise_scale   = 0.75;
     } else {
-        // Path B (Small/Sparse)
         params.init_strat    = InitStrategy::DENSITY_REQUEST_SORT;
         params.cx_strat      = CrossoverStrategy::ACTIVE_SET_CROSSOVER;
         params.mut_strat     = MutationStrategy::PROMOTE_UNPLACED;

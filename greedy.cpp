@@ -146,6 +146,7 @@ long long GreedyDecoder::decode_static_greedy(const vector<int>& order, Solution
 }
 
 // Path A Decoder: Single-placement + 5% soft capacity slack to prevent viral videos from monopolizing dense caches
+// Path A Decoder: Multi-placement + 5% soft capacity slack to optimize knapsack density
 long long GreedyDecoder::decode_soft_slack_repaired(const vector<int>& order, Solution* solution, const DecodeParams& params, vector<char>* out_placed) const {
     static thread_local vector<int> best_latency;
     static thread_local vector<int> used_capacity;
@@ -170,34 +171,43 @@ long long GreedyDecoder::decode_soft_slack_repaired(const vector<int>& order, So
 
     for (int v : order) {
         int size = problem.videos[v];
-        for (int r = request_start[v]; r < request_start[v + 1]; ++r) {
-            for (auto [c, latency] : connections[request_endpoint[r]]) {
-                if (latency < best_latency[r] && used_capacity[c] + size <= soft_cap) {
-                    if (cache_gain[c] == 0) touched_caches.push_back(c);
-                    cache_gain[c] += static_cast<long long>(request_count[r]) * (best_latency[r] - latency);
+        if (size <= 0 || size > problem.cap_cache) continue;
+
+        // UPGRADE: Added the while(true) loop to allow multi-placement in Soft Slack
+        while (true) {
+            int best_cache = -1;
+            long long best_gain = 0;
+
+            for (int r = request_start[v]; r < request_start[v + 1]; ++r) {
+                for (auto [c, latency] : connections[request_endpoint[r]]) {
+                    if (latency < best_latency[r] && used_capacity[c] + size <= soft_cap) {
+                        if (cache_gain[c] == 0) touched_caches.push_back(c);
+                        cache_gain[c] += static_cast<long long>(request_count[r]) * (best_latency[r] - latency);
+                    }
                 }
             }
-        }
 
-        int best_cache = -1;
-        long long best_gain = 0;
-        for (int c : touched_caches) {
-            if (cache_gain[c] > best_gain) {
-                best_gain = cache_gain[c];
-                best_cache = c;
+            for (int c : touched_caches) {
+                if (cache_gain[c] > best_gain) {
+                    best_gain = cache_gain[c];
+                    best_cache = c;
+                }
+                cache_gain[c] = 0;
             }
-            cache_gain[c] = 0;
-        }
-        touched_caches.clear();
-        if (best_cache < 0) continue;
+            touched_caches.clear();
 
-        used_capacity[best_cache] += size;
-        placed_items[best_cache].push_back({v, best_gain});
+            // If no profitable cache is found, break to move to the next video
+            if (best_cache < 0) break;
 
-        for (int r = request_start[v]; r < request_start[v + 1]; ++r) {
-            int latency = problem.network[request_endpoint[r]][best_cache];
-            if (latency > 0 && latency < best_latency[r]) {
-                best_latency[r] = latency;
+            used_capacity[best_cache] += size;
+            placed_items[best_cache].push_back({v, best_gain});
+
+            // Update latency dynamically so the next loop iteration evaluates fresh margins
+            for (int r = request_start[v]; r < request_start[v + 1]; ++r) {
+                int latency = problem.network[request_endpoint[r]][best_cache];
+                if (latency > 0 && latency < best_latency[r]) {
+                    best_latency[r] = latency;
+                }
             }
         }
     }

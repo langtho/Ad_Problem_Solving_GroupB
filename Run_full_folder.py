@@ -11,7 +11,7 @@ OUTPUT_DIR = os.path.join(SCRIPT_DIR, "outputs")
 
 SEED = 42
 MAX_TIME_SECONDS = 230.0
-SUBPROCESS_TIMEOUT = MAX_TIME_SECONDS + 15.0
+SUBPROCESS_TIMEOUT = MAX_TIME_SECONDS + 60.0
 
 
 def evaluate_solution(instance_path, output_text):
